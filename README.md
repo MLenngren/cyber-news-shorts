@@ -32,25 +32,35 @@ Costs depend on provider pricing and your usage, but the intent is “cents per 
 
 ## Quickstart
 
-1) **Prereqs**
-- Python 3
-- `ffmpeg` / `ffprobe`
-- Node.js (for `npx hyperframes`)
+### Option A — Docker (no local toolchain needed)
 
-2) **Configure env**
-- Copy `.env.example` → `.env` and fill in keys.
-- Secrets are **env-first**. Optional `op://` reads only happen when `OP_SERVICE_ACCOUNT_TOKEN` is set.
+Everything the pipeline needs (Python + deps, ffmpeg, Node + HyperFrames, headless Chromium) is bundled in the image.
 
-3) **Render an example short**
+```bash
+cp .env.example .env        # add your API keys — see docs/COSTS.md for which you need
+docker compose build
+docker compose run --rm shorts --mode stock-broll --script shorts/short-002-example.md
+# the rendered short-002-example.mp4 lands in ./shorts
+```
 
-Cheapest/no-API sanity checks:
-- `python3 scripts/parse_script.py --script shorts/short-001-example.md --output shorts/_parsed.json`
-- `npx hyperframes lint` (run from `hyperframes/`)
+### Option B — local install
 
-Full render examples (requires API keys; may incur cost):
-- Stock b-roll: `python3 scripts/render_short.py --mode stock-broll --script shorts/short-002-example.md`
+1) **Prereqs:** Python 3, `ffmpeg` / `ffprobe`, Node.js (for `npx hyperframes`). Run **`./scripts/setup.sh`** to check prerequisites, create `.env`, and set up a Python venv.
 
-Outputs land in `shorts/` as `short-<NNN>-<slug>.mp4` plus sidecars.
+2) **Configure:** copy `.env.example` → `.env` and add your keys. Secrets are **env-first**; optional `op://` reads only happen when `OP_SERVICE_ACCOUNT_TOKEN` is set.
+
+3) **Render an example:**
+
+```bash
+# no-API sanity check:
+python3 scripts/parse_script.py --script shorts/short-001-example.md --output shorts/_parsed.json
+# full render (needs API keys):
+python3 scripts/render_short.py --mode stock-broll --script shorts/short-002-example.md
+```
+
+Outputs land in `shorts/` as `short-<NNN>-<slug>.mp4`.
+
+> 💸 **What does it cost?** See **[docs/COSTS.md](docs/COSTS.md)** — per-API pricing and per-mode $/short. The cheapest path (`stock-broll` with no AI hero shot) is ≈ **$0.05/short** (Pexels is free; you only pay for ElevenLabs voiceover).
 
 ### Gotchas
 
