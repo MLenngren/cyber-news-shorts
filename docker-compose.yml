@@ -1,0 +1,17 @@
+# Convenience wrapper around the Dockerfile.
+#
+#   cp .env.example .env        # add your API keys
+#   docker compose build
+#   docker compose run --rm shorts --mode stock-broll --script shorts/short-002-example.md
+#
+# The rendered MP4 lands in ./shorts on the host (the volume below).
+services:
+  shorts:
+    build: .
+    image: cyber-news-shorts
+    env_file: .env
+    volumes:
+      # your scripts go in here, and the rendered short-NNN.mp4 comes back out
+      - ./shorts:/app/shorts
+    # default command renders the bundled example; override on the CLI as shown above
+    command: ["--mode", "stock-broll", "--script", "shorts/short-002-example.md"]

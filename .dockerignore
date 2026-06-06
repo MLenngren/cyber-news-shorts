@@ -1,0 +1,23 @@
+# Keep the build context to source only — no media, caches, venv, or secrets.
+.git
+.github
+venv
+node_modules
+__pycache__
+*.pyc
+.env
+out/
+assets/
+shorts/*.mp4
+shorts/*.wav
+shorts/*.mp3
+shorts/*.json
+shorts/audio-*/
+shorts/_*
+hyperframes/stock/
+hyperframes/ai/
+hyperframes/stills/
+hyperframes/manifest.json
+hyperframes/timing.json
+hyperframes/transcript.json
+hyperframes/master.wav
