@@ -176,6 +176,14 @@ def main() -> int:
         choices=["b-roll", "talking-head", "talking-head-hybrid", "stock-broll"],
         default=None,
     )
+    p.add_argument(
+        "--edition",
+        choices=["morning", "evening"],
+        default=None,
+        help="Editorial edition. Sets the on-screen brief badge, and (when --mode is "
+        "omitted) selects the render: morning -> stock-broll (no avatar), "
+        "evening -> talking-head-hybrid (HeyGen avatar + Pexels cutaways).",
+    )
     p.add_argument("--script", required=False, help="Path to shorts/short-NNN-slug.md")
     p.add_argument(
         "--id", required=False, help="Short id NNN (alternative to --script)"
@@ -206,8 +214,17 @@ def main() -> int:
     )
     args = p.parse_args()
 
+    # --edition is sugar over --mode: it sets the on-screen brief badge (via
+    # THREATNOIR_EDITION, read later) and, when --mode is omitted, picks the
+    # render. Precedence: explicit --mode > edition-default > THREATNOIR_MODE > default.
+    if args.edition:
+        os.environ["THREATNOIR_EDITION"] = args.edition
+    edition_default_mode = {"morning": "stock-broll", "evening": "talking-head-hybrid"}
     mode = (
-        args.mode or os.environ.get("THREATNOIR_MODE", "").strip() or DEFAULT_MODE
+        args.mode
+        or (edition_default_mode.get(args.edition) if args.edition else "")
+        or os.environ.get("THREATNOIR_MODE", "").strip()
+        or DEFAULT_MODE
     ).strip()
     if mode not in ("b-roll", "talking-head", "talking-head-hybrid", "stock-broll"):
         sys.exit(f"invalid mode: {mode}")

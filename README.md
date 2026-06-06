@@ -39,9 +39,18 @@ Everything the pipeline needs (Python + deps, ffmpeg, Node + HyperFrames, headle
 ```bash
 cp .env.example .env        # add your API keys — see docs/COSTS.md for which you need
 docker compose build
-docker compose run --rm shorts --mode stock-broll --script shorts/short-002-example.md
-# the rendered short-002-example.mp4 lands in ./shorts
+
+# Morning edition — stock b-roll, no avatar (cheapest):
+docker compose run --rm shorts --edition morning --script shorts/short-002-example.md
+
+# Evening edition — HeyGen talking-head + Pexels cutaways (needs HEYGEN_API_KEY):
+docker compose run --rm evening
+#   ...same as: docker compose run --rm shorts --edition evening --script shorts/short-003-evening-example.md
+
+# the rendered short-NNN.mp4 lands in ./shorts
 ```
+
+> **Editions:** `--edition morning` renders `stock-broll` (no avatar); `--edition evening` renders `talking-head-hybrid` (HeyGen avatar + cutaways). It also sets the on-screen "MORNING/EVENING BRIEF" badge. Pass an explicit `--mode` to override.
 
 ### Option B — local install
 

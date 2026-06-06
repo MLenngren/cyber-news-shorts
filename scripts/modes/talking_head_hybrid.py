@@ -12,6 +12,7 @@ Derived composition:       hyperframes/compositions/talking-head-hybrid.html
 from __future__ import annotations
 
 import json
+import os
 import re
 import html as _html
 from pathlib import Path
@@ -723,6 +724,47 @@ def _write_talking_head_hybrid_composition(
     log(f"wrote composition: {out_path}")
 
 
+def _resolve_avatar_id(proj_dir: Path, script_path: Path) -> str:
+    """HeyGen avatar id. Precedence: script frontmatter `heygen_avatar_id` >
+    env `HEYGEN_AVATAR_ID` > characters/max_avatar_id.txt (operator file, if present).
+    A public HeyGen avatar id (e.g. Tyler-incasualsuit-20220721) works out of the box."""
+    post = frontmatter.load(str(script_path))
+    fm = str((post.metadata or {}).get("heygen_avatar_id") or "").strip()
+    if fm:
+        return fm
+    env = os.environ.get("HEYGEN_AVATAR_ID", "").strip()
+    if env:
+        return env
+    f = proj_dir / "characters/max_avatar_id.txt"
+    if f.exists():
+        return f.read_text().splitlines()[0].strip()
+    raise SystemExit(
+        "No HeyGen avatar id. Set `heygen_avatar_id` in the script frontmatter or "
+        "the HEYGEN_AVATAR_ID env var (any public HeyGen avatar id works)."
+    )
+
+
+def _resolve_background(proj_dir: Path, edition: str) -> tuple[str | None, str]:
+    """HeyGen background. Precedence: a pre-uploaded asset id from
+    assets/backgrounds/*.heygen-asset-id (operator's animated newsroom) >
+    env `HEYGEN_BG_ASSET_ID` (+ optional `HEYGEN_BG_TYPE`) > solid-color fallback.
+    Returns (asset_id_or_None, bg_type). The color fallback needs no uploaded asset,
+    so evening mode runs with just a HeyGen key + avatar id."""
+    bg_filename = (
+        "cyber-newsroom-evening.heygen-asset-id"
+        if edition == "evening"
+        else "cyber-newsroom.heygen-asset-id"
+    )
+    f = proj_dir / f"assets/backgrounds/{bg_filename}"
+    if f.exists():
+        return f.read_text().strip(), "video"
+    env = os.environ.get("HEYGEN_BG_ASSET_ID", "").strip()
+    if env:
+        return env, (os.environ.get("HEYGEN_BG_TYPE", "video").strip() or "video")
+    log("no HeyGen background asset (file/env absent) -> solid-color background")
+    return None, "color"
+
+
 def prepare_assets(
     *,
     proj_dir: Path,
@@ -739,21 +781,9 @@ def prepare_assets(
     master_wav = hf_dir / "master.wav"
 
     if not skip_heygen:
-        bg_filename = (
-            "cyber-newsroom-evening.heygen-asset-id"
-            if edition == "evening"
-            else "cyber-newsroom.heygen-asset-id"
-        )
         log(f"HeyGen render (edition={edition or 'default'})")
-        avatar_id = (
-            (proj_dir / "characters/max_avatar_id.txt")
-            .read_text()
-            .splitlines()[0]
-            .strip()
-        )
-        bg_asset_id = (
-            (proj_dir / f"assets/backgrounds/{bg_filename}").read_text().strip()
-        )
+        avatar_id = _resolve_avatar_id(proj_dir, script_path)
+        bg_asset_id, bg_type = _resolve_background(proj_dir, edition)
         hk = talking_head.heygen_key()
         audio_asset = talking_head.heygen_upload_audio(hk, final_wav)
         video_id = talking_head.heygen_generate(
@@ -761,6 +791,7 @@ def prepare_assets(
             avatar_id=avatar_id,
             audio_asset_id=audio_asset,
             bg_asset_id=bg_asset_id,
+            bg_type=bg_type,
         )
         url = talking_head.heygen_poll(hk, video_id, timeout_s=2400)
         talking_head.heygen_download(url, avatar_mp4)

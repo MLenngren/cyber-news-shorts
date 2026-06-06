@@ -6,6 +6,8 @@
 #
 # The rendered MP4 lands in ./shorts on the host (the volume below).
 services:
+  # General service — pass --edition / --mode / --script as you like:
+  #   docker compose run --rm shorts --edition evening --script shorts/short-003-evening-example.md
   shorts:
     build: .
     image: cyber-news-shorts
@@ -13,5 +15,14 @@ services:
     volumes:
       # your scripts go in here, and the rendered short-NNN.mp4 comes back out
       - ./shorts:/app/shorts
-    # default command renders the bundled example; override on the CLI as shown above
-    command: ["--mode", "stock-broll", "--script", "shorts/short-002-example.md"]
+    command: ["--edition", "morning", "--script", "shorts/short-002-example.md"]
+
+  # Convenience: the EVENING edition (HeyGen talking-head + Pexels cutaways).
+  #   docker compose run --rm evening
+  evening:
+    build: .
+    image: cyber-news-shorts
+    env_file: .env
+    volumes:
+      - ./shorts:/app/shorts
+    command: ["--edition", "evening", "--script", "shorts/short-003-evening-example.md"]
