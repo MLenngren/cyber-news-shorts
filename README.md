@@ -5,6 +5,8 @@
 
 Cyber News Shorts is a small, scriptable pipeline for generating vertical (9:16) cybersecurity news shorts.
 
+▶ **[Watch an example render](https://github.com/MLenngren/cyber-news-shorts/releases/download/v0.1.0/cyber-news-shorts-demo.mp4)** — a ~20s `stock-broll` short produced by the included `shorts/short-002-example.md` (ElevenLabs voiceover + Pexels stock + an AI hero clip, composited with HyperFrames).
+
 It turns a Markdown “script” into:
 - structured JSON timing (`shorts/*.json`, `shorts/*.timing.json`)
 - TTS audio (ElevenLabs)
