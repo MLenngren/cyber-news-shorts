@@ -69,11 +69,16 @@ def heygen_generate(
     *,
     avatar_id: str,
     audio_asset_id: str,
-    bg_asset_id: str,
+    bg_asset_id: str | None = None,
     bg_type: str = "video",
+    bg_color: str = "#0a0e1a",
 ) -> str:
-    """bg_type: 'video' (default — animated bg) or 'image' (static fallback)."""
-    if bg_type == "video":
+    """bg_type: 'video' (animated bg asset), 'image' (static bg asset), or 'color'
+    (solid fill — needs no pre-uploaded HeyGen asset; the out-of-box OSS default).
+    Falls back to a color background when no bg_asset_id is supplied."""
+    if bg_type == "color" or not bg_asset_id:
+        background = {"type": "color", "value": bg_color}
+    elif bg_type == "video":
         background = {
             "type": "video",
             "video_asset_id": bg_asset_id,
@@ -102,7 +107,7 @@ def heygen_generate(
         "dimension": {"width": 720, "height": 1280},
     }
     headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
-    log("submit HeyGen video.generate (Tyler + cyber bg)")
+    log(f"submit HeyGen video.generate (avatar={avatar_id}, bg={background['type']})")
     res = http_post(
         f"{HEYGEN_API}/v2/video/generate",
         headers,
