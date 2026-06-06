@@ -1,0 +1,43 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Env
+.env
+
+# OS
+.DS_Store
+
+# Outputs (generated)
+out/
+assets/cache/
+assets/stock/
+assets/stock-broll/
+
+# Render artifacts
+shorts/audio-*/
+shorts/_*
+shorts/*.json
+shorts/*.wav
+shorts/*.mp3
+shorts/*.timing.json
+shorts/*.cost.json
+shorts/*.youtube-video-id
+shorts/*.heygen-asset-id
+shorts/*.mp4
+
+# Generated downloads / caches (no source lives here)
+assets/
+
+# HyperFrames artifacts (generated)
+hyperframes/master.wav
+hyperframes/timing.json
+hyperframes/transcript.json
+hyperframes/manifest.json
+hyperframes/avatar.mp4
+hyperframes/stills/
+hyperframes/stock/
+hyperframes/ai/
+hyperframes/node_modules/

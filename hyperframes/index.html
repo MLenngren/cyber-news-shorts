@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1080, height=1920" />
+  <link rel="icon" href="data:," />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 1080px; height: 1920px;
+      overflow: hidden; background: #04060A;
+      font-family: "Inter", system-ui, sans-serif;
+      color: #F4F1EA;
+      -webkit-font-smoothing: antialiased;
+    }
+    #root { position: relative; width: 100%; height: 100%; background: #04060A; }
+
+    /* Base hero background */
+    .hero {
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 1080px; height: 1920px;
+      object-fit: cover;
+      filter: saturate(1.05) contrast(1.05) brightness(0.95);
+      z-index: 5;
+      opacity: 0;
+    }
+
+    /* Still layers (crossfade) */
+    .still {
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 1080px; height: 1920px;
+      object-fit: cover;
+      z-index: 4;
+      opacity: 0;
+      filter: saturate(1.05) contrast(1.08);
+    }
+
+    .scanlines {
+      position: absolute; inset: 0;
+      pointer-events: none;
+      background-image: repeating-linear-gradient(
+        0deg,
+        rgba(255,255,255,0.025) 0px,
+        rgba(255,255,255,0.025) 1px,
+        transparent 1px,
+        transparent 4px
+      );
+      mix-blend-mode: overlay;
+      z-index: 20;
+      opacity: 0.55;
+    }
+
+    .top-gradient {
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 240px;
+      background: linear-gradient(180deg, rgba(4,6,10,0.88) 0%, rgba(4,6,10,0.55) 55%, transparent 100%);
+      z-index: 30;
+      pointer-events: none;
+    }
+
+    .live-badge {
+      position: absolute;
+      top: 36px; left: 40px;
+      display: flex; align-items: center; gap: 10px;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 18px; letter-spacing: 0.18em;
+      font-weight: 700;
+      color: #FF3355;
+      z-index: 40;
+      opacity: 1;
+    }
+    .live-badge .led {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: #FF3355; box-shadow: 0 0 16px #FF3355;
+      opacity: 1;
+    }
+    .timestamp {
+      position: absolute;
+      top: 78px; left: 40px;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px; letter-spacing: 0.16em;
+      color: #8C9296;
+      z-index: 40;
+    }
+    .show-id {
+      position: absolute;
+      top: 38px; right: 40px;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 16px; letter-spacing: 0.20em;
+      color: #C0C7CB;
+      z-index: 40;
+      text-align: right;
+    }
+    .show-id .accent { color: #5BB7E0; }
+
+    /* Subtitles */
+    .subtitle-band {
+      position: absolute;
+      bottom: 220px; left: 50%;
+      padding: 0;
+      background: transparent;
+      font-family: "Inter", system-ui, sans-serif;
+      font-weight: 900;
+      font-size: 76px;
+      line-height: 1.05;
+      color: #F4F1EA;
+      text-align: center;
+      z-index: 60;
+      opacity: 0;
+      visibility: hidden;
+      white-space: nowrap;
+      text-shadow:
+        0 0 24px rgba(91, 183, 224, 0.55),
+        0 10px 34px rgba(0, 0, 0, 0.75);
+    }
+
+    /* Bottom ticker */
+    .ticker {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 60px;
+      background: linear-gradient(90deg, rgba(8,18,28,0.95), rgba(91,183,224,0.18));
+      border-top: 2px solid rgba(91,183,224,0.55);
+      box-shadow: 0 -2px 16px rgba(91,183,224,0.18);
+      display: flex; align-items: center;
+      overflow: hidden;
+      z-index: 70;
+    }
+    .ticker .strip {
+      display: flex; gap: 70px;
+      white-space: nowrap;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 18px; letter-spacing: 0.14em;
+      color: #C0C7CB;
+      will-change: transform;
+    }
+    .ticker .strip .item .v { color: #5BB7E0; }
+    .ticker .strip .item .r { color: #FF3355; }
+    .ticker .strip .item .w { color: #F2B855; }
+    .ticker .strip .item .m { color: #C458DC; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="main" data-start="0" data-width="1080" data-height="1920">
+
+    <!-- Audio (master.wav is provided by scripts/render_short.py) -->
+    <audio id="master" data-start="0" data-track-index="0" src="master.wav" data-volume="1"></audio>
+
+    <!-- Background video (placeholder). In b-roll mode, JS will swap src to broll.hero if available. -->
+    <video id="hero" class="hero" data-start="0" data-track-index="1"
+           src="../assets/backgrounds/cyber-newsroom-decart-vertical.mp4" muted playsinline></video>
+
+    <!-- Crossfade stills (placeholder src). JS will swap to broll.stills[] if available. -->
+    <img id="stillA" class="clip still" data-start="0" data-duration="999" data-track-index="2"
+         src="../assets/backgrounds/cyber-newsroom.png" />
+    <img id="stillB" class="clip still" data-start="0" data-duration="999" data-track-index="3"
+         src="../assets/backgrounds/cyber-newsroom-evening.png" />
+
+    <div class="scanlines"></div>
+    <div class="top-gradient"></div>
+
+    <!-- Chrome (full-duration clips) -->
+    <div id="live-badge" class="clip live-badge" data-start="0" data-duration="999" data-track-index="10">
+      <span class="led" id="live-led"></span>LIVE
+    </div>
+    <div class="clip timestamp" id="timestamp" data-start="0" data-duration="999" data-track-index="11">CYBER WIRE · 06:00:00 UTC</div>
+    <div id="show-id" class="clip show-id" data-start="0" data-duration="999" data-track-index="12">THREATNOIR<br><span class="accent">// CYBER NEWS</span></div>
+
+    <!-- Subtitles -->
+    <div id="subtitle" class="clip subtitle-band" data-start="0" data-duration="999" data-track-index="13">
+      <span id="sub-text">&nbsp;</span>
+    </div>
+
+    <!-- Ticker -->
+    <div id="ticker" class="clip ticker" data-start="0" data-duration="999" data-track-index="14">
+      <div class="strip" id="ticker-strip">
+        <span class="item">THREATNOIR <span class="v">CYBER NEWS</span></span>
+        <span class="item">B-ROLL MODE <span class="m">RUNWARE</span></span>
+        <span class="item">KEEP SYSTEMS <span class="r">PATCHED</span></span>
+        <span class="item">ASSUME <span class="w">BREACH</span></span>
+        <span class="item">VERIFY <span class="v">LOGS</span> · ROTATE <span class="m">SECRETS</span></span>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    window.__timelines = window.__timelines || {};
+
+    function loadJSON(path) {
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", path, false);
+      xhr.send(null);
+      if (xhr.status >= 200 && xhr.status < 300) {
+        return JSON.parse(xhr.responseText);
+      }
+      throw new Error(`Failed to load ${path}: ${xhr.status}`);
+    }
+
+    const tl = gsap.timeline({ paused: true });
+
+    const hero = document.getElementById("hero");
+    const stillA = document.getElementById("stillA");
+    const stillB = document.getElementById("stillB");
+    const subtitle = document.getElementById("subtitle");
+    const subText = document.getElementById("sub-text");
+    const ticker = document.getElementById("ticker-strip");
+
+    // Centering: use GSAP xPercent/yPercent (avoid CSS transforms so tweens stay centered).
+    gsap.set([hero, stillA, stillB], { xPercent: -50, yPercent: -50 });
+    gsap.set(subtitle, { xPercent: -50, yPercent: 0 });
+
+    // Best-effort inputs (broll.json + timing.json are written by the CLI).
+    let timing = { total_duration: 70, lines: [] };
+    let broll = { stills: [], hero: "" };
+    try { timing = loadJSON("timing.json"); } catch (e) { /* defaults */ }
+    try { broll = loadJSON("broll.json"); } catch (e) { /* defaults */ }
+
+    const total = Math.max(3, Number(timing.total_duration || 70));
+
+    // Swap hero background to Runware-generated hero clip if present.
+    if (broll.hero && typeof broll.hero === "string") {
+      hero.src = broll.hero;
+    }
+
+    // Still schedule (hard cuts + stronger Ken Burns)
+    const stills = (Array.isArray(broll.stills) && broll.stills.length)
+      ? broll.stills
+      : ["../assets/backgrounds/cyber-newsroom.png"];
+
+    function panForIndex(i) {
+      // Deterministic pseudo-jitter (NO Math.random)
+      const x = ((i * 73) % 120) - 60; // -60..+60
+      const y = ((i * 137) % 80) - 40; // -40..+40
+      return { x, y };
+    }
+
+    const seg = total / Math.max(stills.length, 1);
+
+    // Seed stillB hidden.
+    tl.set(stillB, { opacity: 0 }, 0);
+
+    for (let i = 0; i < stills.length; i++) {
+      const t = i * seg;
+      const incoming = (i % 2 === 0) ? stillA : stillB;
+      const outgoing = (i % 2 === 0) ? stillB : stillA;
+      const { x, y } = panForIndex(i);
+
+      const startScale = (i % 2 === 0) ? 1.00 : 1.20;
+      const endScale   = (i % 2 === 0) ? 1.20 : 1.00;
+
+      tl.call(() => { incoming.src = stills[i]; }, null, t);
+
+      // HARD CUT between stills.
+      tl.set(outgoing, { opacity: 0 }, t);
+      tl.set(incoming, { opacity: 1 }, t);
+
+      // Strong Ken Burns per segment.
+      tl.fromTo(
+        incoming,
+        { scale: startScale, x: -x, y: -y, opacity: 1 },
+        { scale: endScale, x: x, y: y, duration: seg, ease: "none" },
+        t
+      );
+      if (i % 3 === 0) {
+        tl.fromTo(
+          incoming,
+          { rotation: -2 },
+          { rotation: 2, duration: seg, ease: "none" },
+          t
+        );
+      }
+    }
+
+    // Hero visibility window (~4s in back third). Keep stills hidden during this window.
+    let heroWindowStart = Number(broll.hero_window_start);
+    if (!Number.isFinite(heroWindowStart)) {
+      const hs = Number(broll.hero_still_index);
+      heroWindowStart = Number.isFinite(hs) ? (hs * seg) : (total * 0.65);
+    }
+    heroWindowStart = Math.max(0, Math.min(heroWindowStart, Math.max(0, total - 0.2)));
+    const heroWindowDuration = Math.max(0.25, Math.min(4.0, total - heroWindowStart));
+    const heroWindowEnd = Math.min(total, heroWindowStart + heroWindowDuration);
+
+    // Align media playback so the hero starts at 0s when it becomes visible.
+    hero.setAttribute("data-start", heroWindowStart.toFixed(3));
+    hero.setAttribute("data-duration", heroWindowDuration.toFixed(3));
+
+    tl.to([stillA, stillB], { opacity: 0, duration: 0.15, ease: "power2.out", overwrite: "auto" }, heroWindowStart);
+    tl.to(hero, { opacity: 1, duration: 0.15, ease: "power2.out", overwrite: "auto" }, heroWindowStart);
+
+    // Ensure hard-hide stills at any segment boundary during the hero window.
+    for (let i = 0; i < stills.length; i++) {
+      const t = i * seg;
+      if (t >= heroWindowStart && t < heroWindowEnd) {
+        tl.set([stillA, stillB], { opacity: 0 }, t);
+      }
+    }
+
+    tl.to(hero, { opacity: 0, duration: 0.15, ease: "power2.out", overwrite: "auto" }, heroWindowEnd);
+    const activeIndex = Math.max(0, Math.min(stills.length - 1, Math.floor(heroWindowEnd / seg)));
+    const activeEl = (activeIndex % 2 === 0) ? stillA : stillB;
+    const inactiveEl = (activeEl === stillA) ? stillB : stillA;
+    tl.to(activeEl, { opacity: 1, duration: 0.15, ease: "power2.out", overwrite: "auto" }, heroWindowEnd);
+    tl.set(inactiveEl, { opacity: 0 }, heroWindowEnd);
+
+    // Kinetic per-word captions from transcript.json (fallback to timing.json words).
+    let transcript = { words: [] };
+    try { transcript = loadJSON("transcript.json"); } catch (e) { /* optional */ }
+    let words = Array.isArray(transcript.words) ? transcript.words : [];
+    if (!words.length) {
+      // Fallback: timing.json line-level words (if present)
+      const lines = Array.isArray(timing.lines) ? timing.lines : [];
+      for (let i = 0; i < lines.length; i++) {
+        const ln = lines[i] || {};
+        const w = Array.isArray(ln.words) ? ln.words : [];
+        for (let j = 0; j < w.length; j++) words.push(w[j]);
+      }
+    }
+    words = words
+      .map(w => ({
+        word: String((w || {}).word || "").trim(),
+        start: Number((w || {}).start || 0),
+        end: Number((w || {}).end || 0),
+      }))
+      .filter(w => w.word && Number.isFinite(w.start) && Number.isFinite(w.end) && w.end > w.start && w.start <= total);
+
+    const POWER = new Set(["BREACH", "PATCH", "ROTATE", "EXPLOIT", "LEAK", "RANSOM", "BACKUPS", "LOGS", "SECRETS"]);
+    function isPowerWord(w) {
+      if (!w) return false;
+      const up = String(w).toUpperCase();
+      if (POWER.has(up)) return true;
+      return up.length >= 7;
+    }
+
+    for (let i = 0; i < words.length; i++) {
+      const wd = words[i] || {};
+      const start = Math.max(0, Math.min(total, Number(wd.start || 0)));
+      const end = Math.max(start + 0.05, Math.min(total, Number(wd.end || 0)));
+      const raw = String(wd.word || "").trim();
+      if (!raw) continue;
+
+      const up = raw.toUpperCase();
+      const power = isPowerWord(up);
+      const scaleTo = power ? 1.15 : 1.0;
+
+      tl.call(() => {
+        subText.textContent = up;
+        subtitle.style.color = power ? "#FF3355" : "#F4F1EA";
+        subtitle.style.textShadow = power
+          ? "0 0 22px rgba(255, 51, 85, 0.55), 0 0 24px rgba(91, 183, 224, 0.45), 0 10px 34px rgba(0,0,0,0.75)"
+          : "0 0 24px rgba(91, 183, 224, 0.55), 0 10px 34px rgba(0,0,0,0.75)";
+      }, null, start);
+
+      tl.set(subText, { visibility: "visible", opacity: 0, scale: 0.85 }, start);
+      tl.to(subText, { opacity: 1, scale: scaleTo, duration: 0.08, ease: "power2.out", overwrite: "auto" }, start);
+
+      const fadeAt = Math.max(start + 0.06, end - 0.10);
+      tl.to(subText, { opacity: 0, duration: 0.10, ease: "power2.in", overwrite: "auto" }, fadeAt);
+      tl.set(subText, { opacity: 0, visibility: "hidden" }, end);
+    }
+
+    // LIVE LED throb (finite)
+    tl.to("#live-led", { opacity: 0.35, duration: 0.7, ease: "sine.inOut", yoyo: true, repeat: Math.max(1, Math.floor(total / 1.4)) }, 0);
+
+    // Ticker scroll (finite)
+    tl.fromTo(ticker, { x: 0 }, { x: -4200, duration: Math.max(8, total * 0.7), ease: "none" }, 0);
+
+    // Timestamp tick
+    const ts = { sec: 0 };
+    tl.to(ts, {
+      sec: total,
+      duration: total,
+      ease: "none",
+      onUpdate: function () {
+        const totalSec = Math.floor(ts.sec);
+        const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
+        const ss = String(totalSec % 60).padStart(2, "0");
+        const el = document.getElementById("timestamp");
+        if (el) el.textContent = `CYBER WIRE · 06:${mm}:${ss} UTC`;
+      }
+    }, 0);
+
+    // Ensure timeline duration matches the audio cut.
+    tl.set({}, {}, total + 0.01);
+
+    window.__timelines["main"] = tl;
+  </script>
+</body>
+</html>

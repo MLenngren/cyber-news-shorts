@@ -1,0 +1,833 @@
+<!-- DERIVED FILE — DO NOT EDIT.
+     Generated from hyperframes/compositions/talking-head-hybrid.html.tmpl by scripts/modes/talking_head_hybrid.py.
+     Edit the .tmpl and re-run scripts/render_short.py to regenerate. -->
+<!-- VISUAL HIERARCHY CONTRACT (v3.3 — 2026-05-24)
+     At any moment, exactly ONE element leads:
+     - t=0 to opener_end:            OPENER POSTER leads, Tyler full-bleed background
+     - opener_end to SUBTITLE_END:   TYLER in PIP + ambient bg + cutaways + RGB caption stack
+                                     (subtitles auto-segment on ≥0.25s gaps, words voice-synced)
+     - SUBTITLE_END to CLIMAX_START: TYLER full-bleed (no subs, no climax — clean breathing room)
+     - CLIMAX_START to audio_end:    TYLER full-bleed + CLIMAX glitch text (RGB word stack)
+     - audio_end to TOTAL_DURATION:  silent tail; climax holds + end card slides in
+
+	     Z-INDEX:
+	     ambient-bg=1 < cutaways=5 < Tyler=10 < captions=15 < flash-bullets=30 < climax=24 < end-card=12 -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1080, height=1920" />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 1080px; height: 1920px;
+      overflow: hidden; background: #04060A;
+      font-family: "Inter", system-ui, sans-serif;
+      color: #F4F1EA;
+      -webkit-font-smoothing: antialiased;
+    }
+    #root { position: relative; width: 100%; height: 100%; background: #04060A; }
+
+    .avatar-video {
+      position: absolute;
+	      top: 0; left: 0;
+      width: 1080px; height: 1920px;
+      object-fit: cover;
+		      z-index: 10;
+	      will-change: transform;
+    }
+
+	    .ambient-bg-video {
+	      position: absolute;
+	      top: 0; left: 0;
+	      width: 1080px; height: 1920px;
+	      object-fit: cover;
+	      opacity: 0;
+	      z-index: 1;
+	      filter: blur(2px) brightness(0.5) saturate(0.7);
+	      will-change: opacity;
+	    }
+
+	    .cutaway-video {
+	      position: absolute;
+	      top: 0;
+	      left: 0;
+	      width: 1080px;
+	      height: 1920px;
+	      object-fit: cover;
+	      opacity: 0;
+	      z-index: 5;
+	      will-change: opacity;
+	    }
+
+    .top-gradient {
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 240px;
+      background: linear-gradient(180deg, rgba(4,6,10,0.85) 0%, rgba(4,6,10,0.55) 50%, transparent 100%);
+      z-index: 10;
+      pointer-events: none;
+    }
+    .live-badge {
+      position: absolute;
+      top: 36px; left: 40px;
+      display: flex; align-items: center; gap: 10px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 18px; letter-spacing: 0.18em;
+      font-weight: 700;
+      color: #FF3355;
+      z-index: 20;
+    }
+    .live-badge .led {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: #FF3355; box-shadow: 0 0 16px #FF3355;
+    }
+    .timestamp {
+      position: absolute;
+      top: 78px; left: 40px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px; letter-spacing: 0.16em;
+      color: #8C9296;
+      z-index: 20;
+    }
+    .show-id {
+      position: absolute;
+      top: 38px; right: 40px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 16px; letter-spacing: 0.20em;
+      color: #C0C7CB;
+      z-index: 20;
+      text-align: right;
+    }
+    .show-id .accent { color: #5BB7E0; }
+
+    .scanlines {
+      position: absolute; inset: 0;
+      pointer-events: none;
+      background-image: repeating-linear-gradient(
+        0deg,
+        rgba(255,255,255,0.025) 0px,
+        rgba(255,255,255,0.025) 1px,
+        transparent 1px,
+        transparent 4px
+      );
+      mix-blend-mode: overlay;
+      z-index: 9;
+    }
+
+    .floater {
+      position: absolute;
+      z-index: 15;
+      opacity: 0;
+    }
+
+	    .opener-poster {
+	      position: absolute;
+	      top: 50%; left: 50%;
+	      width: 920px;
+	      text-align: center;
+	      font-family: "Space Grotesk", sans-serif;
+	      font-weight: 900;
+	      font-size: 140px;
+	      line-height: 0.92;
+	      color: #F4F1EA;
+	      letter-spacing: -0.03em;
+	      text-transform: uppercase;
+	      text-shadow: 0 0 40px rgba(255, 51, 85, 0.4);
+	      opacity: 0;
+	      z-index: 24;
+	    }
+	    .opener-poster .accent { color: #FF3355; }
+
+    /* Top-left tag — MORNING brief = cool blue border */
+    .story-tag {
+      top: 156px; left: 40px;
+      font-family: "Space Grotesk", sans-serif;
+      font-weight: 900; font-size: 26px;
+      color: #5BB7E0;
+      background: rgba(91,183,224,0.12);
+      border: 2px solid #5BB7E0;
+      padding: 8px 22px;
+      letter-spacing: 0.20em;
+      box-shadow: 0 0 30px rgba(91,183,224,0.3);
+    }
+    .story-tag.red {
+      color: #FF3355;
+      background: rgba(255,51,85,0.12);
+      border-color: #FF3355;
+      box-shadow: 0 0 30px rgba(255,51,85,0.3);
+    }
+    .story-tag.warm {
+      color: #F2B855;
+      background: rgba(242,184,85,0.12);
+      border-color: #F2B855;
+      box-shadow: 0 0 30px rgba(242,184,85,0.3);
+    }
+
+		    .caption-stack {
+		      position: absolute;
+			      top: 25%;
+		      left: 50%;
+		      transform: translateX(-50%);
+		      width: 920px;
+		      display: flex;
+		      flex-direction: column;
+		      align-items: center;
+		      gap: 14px;
+		      z-index: 15;
+		      pointer-events: none;
+		    }
+		    .line-row {
+		      position: relative;
+		      display: flex;
+		      flex-wrap: wrap;
+		      justify-content: center;
+		      gap: 18px 22px;
+		      width: 100%;
+		    }
+		    .word-row {
+		      position: relative;
+		      display: inline-flex;
+		      justify-content: center;
+		      align-items: center;
+		      opacity: 0;
+		      line-height: 0.95;
+		      letter-spacing: -0.02em;
+		    }
+		    .word-row .layer {
+		      font-family: "Space Grotesk", sans-serif;
+		      font-weight: 900;
+		      font-size: 78px;
+		      letter-spacing: -0.02em;
+		      white-space: nowrap;
+		      text-transform: uppercase;
+		    }
+		    .word-row .layer.r,
+		    .word-row .layer.c {
+		      position: absolute;
+		      top: 0; left: 50%;
+		      transform: translateX(-50%);
+		      opacity: 0.85;
+		      mix-blend-mode: screen;
+		      pointer-events: none;
+		    }
+		    .word-row .layer.main { color: #F4F1EA; text-shadow: 0 2px 18px rgba(0,0,0,0.55); }
+		    .word-row .layer.r    { color: #FF3355; }
+		    .word-row .layer.c    { color: #5BB7E0; }
+		    .word-row mark.hl {
+		      background: rgba(245, 212, 66, 0.96);
+		      color: #04060A;
+		      padding: 2px 12px;
+		      border-radius: 6px;
+		      font-weight: 900;
+		      box-decoration-break: clone;
+		      -webkit-box-decoration-break: clone;
+		    }
+
+    /* Bottom ticker — morning cool edition */
+    .ticker {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 60px;
+      background: linear-gradient(90deg, rgba(8,18,28,0.95), rgba(91,183,224,0.18));
+      border-top: 2px solid rgba(91,183,224,0.55);
+      box-shadow: 0 -2px 16px rgba(91,183,224,0.18);
+      display: flex; align-items: center;
+      overflow: hidden;
+      z-index: 25;
+    }
+    .ticker .strip {
+      display: flex; gap: 70px;
+      white-space: nowrap;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 18px; letter-spacing: 0.14em;
+      color: #C0C7CB;
+      will-change: transform;
+    }
+    .ticker .strip .item .v { color: #5BB7E0; }
+    .ticker .strip .item .red { color: #FF3355; }
+    .ticker .strip .item .warm { color: #F2B855; }
+    .ticker .strip .item .magenta { color: #C458DC; }
+    .ticker .strip .item .cool { color: #5BB7E0; }
+
+    /* End card */
+    .end-card {
+      position: absolute;
+      inset: 0;
+      background: rgba(4, 6, 10, 0.97);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 100;
+      opacity: 0;
+    }
+    .end-card .show {
+      font-family: "Space Grotesk", sans-serif;
+      font-weight: 800; font-size: 84px;
+      letter-spacing: -0.02em; color: #F4F1EA; line-height: 1.0;
+      text-align: center;
+    }
+    .end-card .show .slash { color: #5BB7E0; margin: 0 10px; }
+    .end-card .tagline {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 26px; letter-spacing: 0.14em;
+      color: #C0C7CB; margin-top: 36px; text-align: center; padding: 0 60px; line-height: 1.5;
+    }
+    .end-card .tagline .accent { color: #5BB7E0; }
+    .end-card .tagline .red { color: #FF3355; }
+    .end-card .tagline .warm { color: #F2B855; }
+    .end-card .source {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 14px; letter-spacing: 0.20em;
+      color: #4D5C61; margin-top: 56px;
+    }
+
+	    .flash-bullet {
+	      position: absolute;
+	      top: 50%; left: 50%;
+	      padding: 28px 48px;
+	      background: rgba(0, 0, 0, 0.82);
+	      backdrop-filter: blur(6px);
+	      border-radius: 10px;
+	      border-left: 4px solid #FF3355;
+	      text-align: center;
+	      font-family: "Space Grotesk", sans-serif;
+	      font-weight: 900;
+	      color: #F4F1EA;
+	      letter-spacing: -0.02em;
+	      opacity: 0;
+	      z-index: 30;
+	      white-space: nowrap;
+	    }
+    .flash-bullet .main { font-size: 120px; line-height: 1.0; }
+    .flash-bullet .sub {
+      font-size: 36px;
+      color: #C0C7CB;
+      margin-top: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+	    .climax-glitch {
+	      position: absolute;
+	      top: 30%; left: 50%;
+	      transform: translate(-50%, 0);
+	      width: 920px;
+	      display: flex;
+	      flex-direction: column;
+	      align-items: center;
+	      gap: 12px;
+	      font-family: "Space Grotesk", sans-serif;
+	      font-weight: 900;
+	      color: #F4F1EA;
+	      letter-spacing: -0.03em;
+	      opacity: 0;
+	      z-index: 24;
+	      text-shadow: 0 0 30px rgba(91, 183, 224, 0.4);
+	    }
+	    .climax-glitch .word { font-size: 88px; line-height: 0.95; text-align: center; }
+
+	    .climax-glitch-r, .climax-glitch-c {
+	      position: absolute; top: 30%; left: 50%; transform: translate(-50%, 0);
+	      width: 920px;
+	      display: flex; flex-direction: column; align-items: center; gap: 12px;
+	      font-family: "Space Grotesk", sans-serif;
+	      font-weight: 900;
+	      letter-spacing: -0.03em;
+	      opacity: 0;
+	      mix-blend-mode: screen;
+	      pointer-events: none;
+	      z-index: 24;
+	    }
+	    .climax-glitch-r .word, .climax-glitch-c .word { font-size: 88px; line-height: 0.95; text-align: center; }
+	    .climax-glitch-r { color: #FF3355; }
+	    .climax-glitch-c { color: #5BB7E0; }
+  </style>
+</head>
+<body>
+	  <div id="root" data-composition-id="main"
+	       data-start="0" data-duration="46.16"
+       data-width="1080" data-height="1920">
+
+    <!-- Master audio (HeyGen-synced) -->
+	    <audio id="master" class="clip"
+	           data-start="0" data-duration="43.16"
+           data-track-index="50"
+           src="master.wav" data-volume="1"></audio>
+
+	    <video id="ambient-bg"
+	           class="clip ambient-bg-video"
+	           data-start="4.80"
+	           data-duration="33.066"
+	           data-track-index="0"
+	           src="stock/ambient-bg.mp4"
+	           style=""
+	           muted playsinline loop></video>
+
+    <!-- Full-screen Tyler avatar -->
+	    <video id="avatar" class="clip avatar-video"
+	           data-start="0" data-duration="43.16" data-track-index="1"
+           src="avatar.mp4" muted playsinline></video>
+
+	    <!-- Cutaways (b-roll) (written by scripts/modes/talking_head_hybrid.py). -->
+	    <video id="cutaway-0" class="clip cutaway-video" data-start="7.53" data-duration="4.50" data-track-index="30" src="stock/cutaway-0.mp4" muted playsinline></video>
+    <video id="cutaway-1" class="clip cutaway-video" data-start="17.05" data-duration="4.00" data-track-index="31" src="stock/cutaway-1.mp4" muted playsinline></video>
+    <video id="cutaway-2" class="clip cutaway-video" data-start="26.80" data-duration="4.00" data-track-index="32" src="stock/cutaway-2.mp4" muted playsinline></video>
+    <video id="cutaway-3" class="clip cutaway-video" data-start="33.91" data-duration="3.50" data-track-index="33" src="stock/cutaway-3.mp4" muted playsinline></video>
+
+
+    <div class="scanlines"></div>
+
+    <!-- Top chrome -->
+    <div class="top-gradient"></div>
+    <div class="live-badge"><span class="led" id="live-led"></span>LIVE</div>
+    <div class="timestamp" id="timestamp">CYBER WIRE · 06:00 UTC</div>
+    <div class="show-id">THREATNOIR<br><span class="accent">// CYBER NEWS</span></div>
+
+    <!-- Story tags (top-left) — track 5 (morning brief = cool blue) -->
+	    <div id="tag-morning" class="clip floater story-tag"
+	         data-start="0.3" data-duration="3.70" data-track-index="10">▌ EVENING BRIEF</div>
+	    <div id="tag-story1" class="clip floater story-tag red"
+	         data-start="0.00" data-duration="0.00" data-track-index="10">▌ </div>
+	    <div id="tag-story2" class="clip floater story-tag warm"
+	         data-start="0.00" data-duration="0.00" data-track-index="10">▌ </div>
+	    <div id="tag-story3" class="clip floater story-tag red"
+	         data-start="0.00" data-duration="0.00" data-track-index="10">▌ </div>
+
+    <!-- ============ Track 3: full-screen overlays ============ -->
+
+	    <div id="opener-poster" class="clip opener-poster floater"
+	         data-start="0.5" data-duration="4.000"
+	         data-track-index="3" style=""><div>300 FAKE STADIUMS</div><div class="accent">ONE WORLD CUP</div></div>
+
+    <!-- Flash bullets (written by scripts/modes/talking_head_hybrid.py). -->
+        <div id="flash-0" class="flash-bullet"><div class="main">300+ SITES</div><div class="sub">CLONED FROM FIFA.COM</div></div>
+    <div id="flash-1" class="flash-bullet"><div class="main">UP TO $474M</div><div class="sub">TICKET FRAUD ALONE</div></div>
+    <div id="flash-2" class="flash-bullet"><div class="main">FBI WARNING</div><div class="sub">KICKOFF JUNE 11</div></div>
+
+
+	    <!-- Climax GLITCH (render-time punchline) -->
+	    <div id="climax-glitch" class="clip climax-glitch floater"
+	         data-start="40.66" data-duration="3.50" data-track-index="24">
+	      <div class="word">THE</div><div class="word">REAL</div><div class="word">ACCOUNT.</div>
+	    </div>
+	    <div id="climax-glitch-r" class="climax-glitch-r"><div class="word">THE</div><div class="word">REAL</div><div class="word">ACCOUNT.</div></div>
+	    <div id="climax-glitch-c" class="climax-glitch-c"><div class="word">THE</div><div class="word">REAL</div><div class="word">ACCOUNT.</div></div>
+
+
+	    <div class="caption-stack" id="captionStack"></div>
+
+    <!-- Bottom ticker -->
+    <div class="ticker">
+	      <div class="strip" id="ticker-strip">
+	        <span class="item">EVENING BRIEF <span class="cool">05 JUN 2026 · THE STADIUM THAT ISN'T THERE</span></span>
+        <span class="item">SOURCES <span class="warm">THREATNOIR EVENING BRIEF · 2026-06-05</span></span>
+	      </div>
+    </div>
+
+    <!-- End card (track 6) -->
+	    <div id="end-card" class="clip end-card"
+	         data-start="44.16" data-duration="2.00" data-track-index="12">
+      <div class="show">THREATNOIR<span class="slash">//</span>CYBER NEWS</div>
+	      <div class="tagline">THE STADIUM THAT ISN'T THERE</div>
+	      <div class="source">SOURCES &middot; THREATNOIR EVENING BRIEF &middot; 2026-06-05</div>
+    </div>
+
+  </div>
+
+  <script>
+    window.__timelines = window.__timelines || {};
+	    window.__CUTAWAYS__ = [{"start": 7.53, "duration": 4.5, "src": "stock/cutaway-0.mp4"}, {"start": 17.051, "duration": 4.0, "src": "stock/cutaway-1.mp4"}, {"start": 26.803, "duration": 4.0, "src": "stock/cutaway-2.mp4"}, {"start": 33.908, "duration": 3.5, "src": "stock/cutaway-3.mp4"}];
+		    window.__FLASH_BULLETS__ = [{"at_sec": 7.43, "text": "300+ SITES", "sub": "CLONED FROM FIFA.COM"}, {"at_sec": 22.709, "text": "UP TO $474M", "sub": "TICKET FRAUD ALONE"}, {"at_sec": 26.709, "text": "FBI WARNING", "sub": "KICKOFF JUNE 11"}];
+    const tl = gsap.timeline({ paused: true });
+
+		    // Avatar PIP layout (bottom-right). Used once early, then once back to full.
+	    tl.set("#avatar", { transformOrigin: "top left", x: 0, y: 0, scale: 1 }, 0);
+	    const PIP = {
+	      scale: 0.25,
+	      x: 1080 - 60 - 1080 * 0.25,
+	      y: 1920 - 60 - 1920 * 0.25
+	    };
+		    const PIP_START_TIME = Number(4.80);
+		    const PIP_END_TIME = Number(37.87);
+		    if (
+		      Number.isFinite(PIP_START_TIME) &&
+		      Number.isFinite(PIP_END_TIME) &&
+		      PIP_START_TIME >= 0 &&
+		      PIP_END_TIME > PIP_START_TIME
+		    ) {
+		      tl.to(
+		        "#avatar",
+		        { ...PIP, duration: 0.5, ease: "power2.out", overwrite: "auto" },
+		        PIP_START_TIME
+		      );
+		      tl.to(
+		        "#avatar",
+		        { x: 0, y: 0, scale: 1, duration: 0.5, ease: "power2.out", overwrite: "auto" },
+		        PIP_END_TIME
+		      );
+
+		      const ambientEl = document.querySelector("#ambient-bg");
+		      if (ambientEl && ambientEl.style.display !== "none") {
+		        tl.to(
+		          "#ambient-bg",
+		          { opacity: 0.35, duration: 0.6, ease: "power2.out", overwrite: "auto" },
+		          PIP_START_TIME
+		        );
+		        tl.to(
+		          "#ambient-bg",
+		          { opacity: 0.0, duration: 0.4, ease: "power2.in", overwrite: "auto" },
+		          PIP_END_TIME
+		        );
+		      }
+		    }
+
+		    // Per-word timing from Whisper transcript.json
+		    const WORDS = [{ word: "Three", start: 0.058, end: 0.279 }, { word: "hundred", start: 0.325, end: 0.592 }, { word: "fake", start: 0.650, end: 0.882 }, { word: "ticket", start: 0.906, end: 1.184 }, { word: "sites", start: 1.242, end: 1.533 }, { word: "are", start: 1.567, end: 1.683 }, { word: "open", start: 1.730, end: 1.950 }, { word: "before", start: 1.997, end: 2.357 }, { word: "the", start: 2.415, end: 2.485 }, { word: "World", start: 2.543, end: 2.786 }, { word: "Cup", start: 2.833, end: 3.019 }, { word: "begins", start: 3.088, end: 3.669 }, { word: "The", start: 3.959, end: 4.064 }, { word: "tournament", start: 4.133, end: 4.563 }, { word: "hasn't", start: 4.621, end: 4.888 }, { word: "kicked", start: 4.923, end: 5.190 }, { word: "off", start: 5.236, end: 5.550 }, { word: "The", start: 5.759, end: 5.886 }, { word: "scam", start: 5.933, end: 6.246 }, { word: "already", start: 6.316, end: 6.687 }, { word: "has", start: 6.769, end: 7.198 }, { word: "They", start: 7.488, end: 7.627 }, { word: "cloned", start: 7.674, end: 8.034 }, { word: "the", start: 8.069, end: 8.138 }, { word: "official", start: 8.185, end: 8.568 }, { word: "site", start: 8.626, end: 8.974 }, { word: "pixel", start: 9.009, end: 9.346 }, { word: "for", start: 9.392, end: 9.497 }, { word: "pixel", start: 9.543, end: 10.054 }, { word: "You", start: 10.333, end: 10.437 }, { word: "enter", start: 10.507, end: 10.704 }, { word: "your", start: 10.751, end: 10.867 }, { word: "card", start: 10.913, end: 11.192 }, { word: "to", start: 11.238, end: 11.296 }, { word: "buy", start: 11.354, end: 11.494 }, { word: "a", start: 11.528, end: 11.563 }, { word: "seat", start: 11.621, end: 11.970 }, { word: "and", start: 12.144, end: 12.283 }, { word: "you", start: 12.341, end: 12.422 }, { word: "pay", start: 12.492, end: 12.655 }, { word: "the", start: 12.701, end: 12.771 }, { word: "scammer", start: 12.817, end: 13.258 }, { word: "The", start: 13.584, end: 13.677 }, { word: "targets", start: 13.735, end: 14.141 }, { word: "are", start: 14.176, end: 14.292 }, { word: "ordinary", start: 14.350, end: 14.733 }, { word: "fans", start: 14.791, end: 15.070 }, { word: "and", start: 15.105, end: 15.186 }, { word: "families", start: 15.255, end: 15.662 }, { word: "chasing", start: 15.708, end: 16.068 }, { word: "a", start: 16.126, end: 16.149 }, { word: "ticket", start: 16.208, end: 16.660 }, { word: "Fake", start: 16.997, end: 17.230 }, { word: "streaming", start: 17.253, end: 17.566 }, { word: "apps", start: 17.624, end: 17.787 }, { word: "promise", start: 17.833, end: 18.147 }, { word: "the", start: 18.182, end: 18.251 }, { word: "match", start: 18.286, end: 18.484 }, { word: "for", start: 18.518, end: 18.623 }, { word: "free", start: 18.692, end: 19.099 }, { word: "What", start: 19.423, end: 19.574 }, { word: "they", start: 19.609, end: 19.713 }, { word: "actually", start: 19.760, end: 20.073 }, { word: "install", start: 20.120, end: 20.491 }, { word: "is", start: 20.561, end: 20.642 }, { word: "banking", start: 20.712, end: 21.118 }, { word: "malware", start: 21.176, end: 21.606 }, { word: "on", start: 21.675, end: 21.791 }, { word: "your", start: 21.838, end: 21.989 }, { word: "phone", start: 22.047, end: 22.442 }, { word: "Ticket", start: 22.779, end: 23.081 }, { word: "fraud", start: 23.127, end: 23.406 }, { word: "alone", start: 23.464, end: 23.824 }, { word: "could", start: 23.882, end: 24.056 }, { word: "cost", start: 24.102, end: 24.334 }, { word: "victims", start: 24.404, end: 24.799 }, { word: "up", start: 24.868, end: 25.008 }, { word: "to", start: 25.066, end: 25.135 }, { word: "four", start: 25.252, end: 25.507 }, { word: "hundred", start: 25.553, end: 25.844 }, { word: "million", start: 25.890, end: 26.180 }, { word: "dollars", start: 26.238, end: 26.645 }, { word: "The", start: 26.773, end: 26.866 }, { word: "FBI", start: 26.912, end: 27.365 }, { word: "is", start: 27.446, end: 27.551 }, { word: "warning", start: 27.609, end: 27.922 }, { word: "fans", start: 27.992, end: 28.294 }, { word: "because", start: 28.340, end: 28.619 }, { word: "the", start: 28.653, end: 28.723 }, { word: "brand", start: 28.770, end: 29.013 }, { word: "itself", start: 29.071, end: 29.397 }, { word: "is", start: 29.455, end: 29.536 }, { word: "the", start: 29.582, end: 29.652 }, { word: "bait", start: 29.710, end: 30.116 }, { word: "A", start: 30.407, end: 30.453 }, { word: "trusted", start: 30.523, end: 30.883 }, { word: "name", start: 30.941, end: 31.161 }, { word: "does", start: 31.196, end: 31.359 }, { word: "the", start: 31.382, end: 31.452 }, { word: "convincing", start: 31.498, end: 31.986 }, { word: "the", start: 32.044, end: 32.125 }, { word: "attacker", start: 32.172, end: 32.613 }, { word: "never", start: 32.706, end: 32.961 }, { word: "had", start: 33.019, end: 33.193 }, { word: "to", start: 33.251, end: 33.518 }, { word: "Your", start: 33.878, end: 34.029 }, { word: "thirty-minute", start: 34.075, end: 34.621 }, { word: "check", start: 34.644, end: 34.992 }, { word: "verify", start: 35.236, end: 35.735 }, { word: "the", start: 35.793, end: 35.875 }, { word: "exact", start: 35.933, end: 36.246 }, { word: "domain", start: 36.293, end: 36.618 }, { word: "before", start: 36.699, end: 36.978 }, { word: "you", start: 37.012, end: 37.094 }, { word: "enter", start: 37.175, end: 37.419 }, { word: "a", start: 37.477, end: 37.512 }, { word: "card", start: 37.558, end: 38.022 }, { word: "Use", start: 38.301, end: 38.521 }, { word: "a", start: 38.556, end: 38.579 }, { word: "low-limit", start: 38.649, end: 39.079 }, { word: "card", start: 39.125, end: 39.357 }, { word: "for", start: 39.392, end: 39.497 }, { word: "the", start: 39.531, end: 39.601 }, { word: "purchase", start: 39.648, end: 40.263 }, { word: "so", start: 40.437, end: 40.576 }, { word: "a", start: 40.634, end: 40.658 }, { word: "fake", start: 40.727, end: 40.994 }, { word: "stadium", start: 41.029, end: 41.424 }, { word: "can't", start: 41.494, end: 41.784 }, { word: "drain", start: 41.819, end: 42.039 }, { word: "the", start: 42.086, end: 42.155 }, { word: "real", start: 42.190, end: 42.353 }, { word: "account", start: 42.388, end: 42.829 }];
+		    const HIGHLIGHT_WORDS = new Set(["300", "kickoff", "fifa.com", "scammer", "families", "streaming", "banking", "malware", "$474", "million", "fbi", "bait", "domain", "low-limit", "hundred", "attacker"]);
+
+		    const SUBTITLE_START_SEC = 4.80;
+		    const SUBTITLE_END_SEC   = 37.97;
+		    const LINE_GAP_SEC = 0.25;
+		    const WORD_IN_DUR = 0.18, RESOLVE_DELAY = 0.20, RESOLVE_DUR = 0.28;
+		    const FRINGE_PUSH = 6, FRINGE_IN = 28;
+			    const LINE_EXIT_DUR = 0.30;
+
+			    const LINES_PER_PARAGRAPH = 2;
+
+			    const stack = document.getElementById("captionStack");
+
+			    // Pre-compute end times for gap detection
+			    WORDS.forEach(w => { w.end_ = (typeof w.end === "number" ? w.end : (w.start + 0.3)); });
+
+			    // Segment words into lines by ≥LINE_GAP_SEC pause gap
+			    function segmentLines(words) {
+			      const lines = []; let cur = [];
+			      for (let i = 0; i < words.length; i++) {
+			        if (cur.length === 0) cur.push(i);
+			        else {
+			          const gap = words[i].start - words[cur[cur.length-1]].end_;
+			          if (gap > LINE_GAP_SEC) { lines.push(cur); cur = [i]; }
+			          else cur.push(i);
+			        }
+			      }
+			      if (cur.length) lines.push(cur);
+			      return lines;
+			    }
+			    const LINES = segmentLines(WORDS);
+			    const lineEls = new Array(LINES.length).fill(null);
+
+			    // Build a word element (3 RGB layers + optional yellow highlight)
+			    function buildWord(text, allowHighlight) {
+			      const upper = String(text).toUpperCase();
+			      // Case-insensitive match: producer brackets are uppercased, Whisper words
+			      // are mixed-case. Set is lowercased server-side; lowercase here too.
+			      const bare = String(text).toLowerCase().replace(/[.,;:!?"']+$/g, "");
+			      const isHL = allowHighlight && HIGHLIGHT_WORDS.has(bare);
+			      const html = isHL ? `<mark class="hl">${upper}</mark>` : upper;
+			      const row = document.createElement("span");
+			      row.className = "word-row";
+			      row.style.opacity = 0;
+			      row.innerHTML = `
+			        <span class="layer r">${html}</span>
+			        <span class="layer c">${html}</span>
+			        <span class="layer main">${html}</span>
+			      `;
+			      return row;
+			    }
+
+			    // Pre-create all line containers + word elements at page load.
+			    // Each line is a <div class="line-row"> with its words appended.
+			    // All animations placed on the master timeline `tl` at absolute timestamps —
+			    // HyperFrames seeks per-frame and GSAP applies correct state.
+			    LINES.forEach((lineIdxs, lineIdx) => {
+			      const lineEl = document.createElement("div");
+			      lineEl.className = "line-row";
+			      lineEl.style.opacity = 1;
+			      lineEls[lineIdx] = lineEl;
+			      stack.appendChild(lineEl);
+
+			      const firstWord = WORDS[lineIdxs[0]];
+			      const lineStart = firstWord.start;
+			      const nextLineStart = (lineIdx + 1 < LINES.length)
+			        ? WORDS[LINES[lineIdx + 1][0]].start
+			        : SUBTITLE_END_SEC;
+
+			      // Skip lines outside the subtitle window entirely
+			      if (lineStart >= SUBTITLE_END_SEC || nextLineStart <= SUBTITLE_START_SEC) {
+			        lineEl.style.display = "none";
+			        return;
+			      }
+
+			      // Build word elements + place their entry/resolve tweens on `tl`.
+			      // Cap: at most ONE yellow highlight per logical line — only the first
+			      // power-word match in each line gets the mark. Reduces visual noise.
+			      let lineHadHighlight = false;
+			      lineIdxs.forEach((wi) => {
+			        const w = WORDS[wi];
+			        if (w.start < SUBTITLE_START_SEC || w.start >= SUBTITLE_END_SEC) return;
+			        const bareForHL = String(w.word).toLowerCase().replace(/[.,;:!?"']+$/g, "");
+			        const eligibleHL = !lineHadHighlight && HIGHLIGHT_WORDS.has(bareForHL);
+			        if (eligibleHL) lineHadHighlight = true;
+			        const el = buildWord(w.word, eligibleHL);
+			        lineEl.appendChild(el);
+			        const rL = el.querySelector(".layer.r");
+			        const cL = el.querySelector(".layer.c");
+
+			        // Entry: opacity + scale + RGB chroma drift
+			        tl.fromTo(el,
+			          { opacity: 0, scale: 0.88 },
+			          { opacity: 1, scale: 1.0, duration: WORD_IN_DUR, ease: "power3.out", overwrite: "auto" },
+			          w.start);
+			        tl.fromTo(rL,
+			          { x: -FRINGE_IN, opacity: 0.85 },
+			          { x: -FRINGE_PUSH, duration: WORD_IN_DUR, ease: "power2.out", overwrite: "auto" },
+			          w.start);
+			        tl.fromTo(cL,
+			          { x: FRINGE_IN, opacity: 0.85 },
+			          { x: FRINGE_PUSH, duration: WORD_IN_DUR, ease: "power2.out", overwrite: "auto" },
+			          w.start);
+			        // Glitch pulse
+			        tl.to(el,
+			          { scale: 1.05, duration: 0.08, yoyo: true, repeat: 1, ease: "power2.inOut", overwrite: "auto" },
+			          w.start + WORD_IN_DUR + 0.02);
+			        // Resolve: RGB layers fade out to clean white text
+			        tl.to([rL, cL],
+			          { x: 0, opacity: 0, duration: RESOLVE_DUR, ease: "power2.inOut", overwrite: "auto" },
+			          w.start + WORD_IN_DUR + RESOLVE_DELAY);
+			      });
+
+			    });
+
+			    // Paragraph scroll-up: every LINES_PER_PARAGRAPH lines, fade+slide-up the whole paragraph
+			    // together so new lines start fresh at the top of the stack.
+			    const PARAGRAPH_EXIT_DUR = 0.45;
+			    const PARAGRAPH_EXIT_Y = -120;  // larger slide-up than per-line exit
+
+			    for (let p = 0; p < LINES.length; p += LINES_PER_PARAGRAPH) {
+			      const pEnd = Math.min(p + LINES_PER_PARAGRAPH, LINES.length);
+			      const lastLineIdxs = LINES[pEnd - 1];
+			      const lastWordInPara = WORDS[lastLineIdxs[lastLineIdxs.length - 1]];
+			      const paraEndTime = lastWordInPara.end_;
+
+			      let exitAt;
+			      if (pEnd < LINES.length) {
+			        const nextParaFirstWord = WORDS[LINES[pEnd][0]];
+			        exitAt = Math.max(paraEndTime + 0.3, nextParaFirstWord.start - PARAGRAPH_EXIT_DUR - 0.05);
+			      } else {
+			        exitAt = Math.min(paraEndTime + 0.5, SUBTITLE_END_SEC - PARAGRAPH_EXIT_DUR);
+			      }
+
+			      // Fade + slide-up all lines in this paragraph; collapse layout via display:none
+			      for (let li = p; li < pEnd; li++) {
+			        const el = lineEls[li];
+			        if (!el) continue;
+			        tl.to(el,
+			          {
+			            opacity: 0,
+			            y: PARAGRAPH_EXIT_Y,
+			            duration: PARAGRAPH_EXIT_DUR,
+			            ease: "power2.in",
+			            overwrite: "auto",
+			            onComplete: () => { el.style.display = "none"; },
+			          },
+			          exitAt);
+			      }
+			    }
+
+	    /* Cutaways timeline (written by scripts/modes/talking_head_hybrid.py). */
+	    (function bindCutaways() {
+	      const raw = window.__CUTAWAYS__;
+	      const cuts = Array.isArray(raw) ? raw.slice() : [];
+	      cuts.sort((a, b) => Number(a?.start || 0) - Number(b?.start || 0));
+	      if (!cuts.length) return;
+
+	      for (let i = 0; i < cuts.length; i++) {
+	        const c = cuts[i] || {};
+	        const start = Number(c.start || 0);
+	        const duration = Math.max(0, Number(c.duration || 0));
+	        const end = start + duration;
+	        const next = i + 1 < cuts.length ? (cuts[i + 1] || {}) : null;
+	        const nextStart = next ? Number(next.start || 0) : null;
+	        const nearNext = nextStart !== null && (nextStart - end) < 1.0;
+	
+	        const tIn = Math.max(0, start - 0.2);
+	        const tOut = Math.max(0, (nearNext ? nextStart : end) - 0.2);
+	
+	        const id = "#cutaway-" + String(i);
+	        const nextId = "#cutaway-" + String(i + 1);
+
+		        // Cutaway fade in/out only. Avatar sizing is controlled by the global PIP rhythm above.
+	        tl.to(id, { opacity: 1, duration: 0.4, ease: "power2.inOut", overwrite: "auto" }, tIn);
+
+	        if (nearNext) {
+	          // Crossfade to the next cutaway and stay in PIP.
+	          tl.to(id, { opacity: 0, duration: 0.4, ease: "power2.inOut", overwrite: "auto" }, tOut);
+	          tl.to(nextId, { opacity: 1, duration: 0.4, ease: "power2.inOut", overwrite: "auto" }, tOut);
+	        } else {
+	          // Exit PIP + fade out cutaway.
+	          tl.to(id, { opacity: 0, duration: 0.4, ease: "power2.inOut", overwrite: "auto" }, tOut);
+	        }
+	      }
+	    })();
+
+		    /* Flash bullets timeline (written by scripts/modes/talking_head_hybrid.py). */
+		    (function bindFlashBullets() {
+		      const raw = window.__FLASH_BULLETS__;
+		      const bullets = Array.isArray(raw) ? raw.slice() : [];
+		      if (!bullets.length) return;
+		
+		      for (let i = 0; i < bullets.length; i++) {
+		        const b = bullets[i] || {};
+		        const at = Number(b.at_sec ?? 0);
+		        if (!Number.isFinite(at) || at < 0) continue;
+		        const id = "#flash-" + String(i);
+		        if (!document.querySelector(id)) continue;
+		
+		        tl.set(id, { xPercent: -50, yPercent: -50, scale: 0.92 }, 0);
+		        tl.fromTo(
+		          id,
+		          { opacity: 0 },
+		          { opacity: 1, scale: 1.0, duration: 0.2, ease: "back.out(2)", overwrite: "auto" },
+		          at
+		        );
+		        tl.to(id, { opacity: 0, duration: 0.3, ease: "power2.in", overwrite: "auto" }, at + 2.0);
+		      }
+		    })();
+
+    /* LIVE LED throb */
+    tl.to("#live-led", { opacity: 0.4, duration: 0.7, ease: "sine.inOut", yoyo: true, repeat: 100 }, 0);
+
+	    const TOTAL = Number(document.querySelector("#root")?.dataset?.duration || 0);
+	
+	    /* Ticker scroll — finite (capture-safe) and bounded by composition duration */
+	    tl.fromTo(
+	      "#ticker-strip",
+	      { x: 0 },
+	      { x: -4200, duration: Math.max(8, TOTAL * 0.95), ease: "none" },
+	      0
+	    );
+
+	    /* Timestamp tick (bounded by composition duration) */
+    const ts = { sec: 0 };
+    tl.to(ts, {
+	      sec: TOTAL, duration: TOTAL, ease: "none",
+      onUpdate: function() {
+        const total = Math.floor(ts.sec);
+        const m = String(Math.floor(total / 60)).padStart(2, "0");
+        const s = String(total % 60).padStart(2, "0");
+        const el = document.querySelector("#timestamp");
+        if (el) el.innerText = "CYBER WIRE · 06:" + m + ":" + s + " UTC";
+      }
+    }, 0);
+
+	    /* === Story tags fade-in/out (schedule from clip data attrs) === */
+	    function _numAttr(el, name, fallback) {
+	      if (!el) return fallback;
+	      const v = Number(el.dataset ? el.dataset[name] : undefined);
+	      return Number.isFinite(v) ? v : fallback;
+	    }
+	    function bindTag(sel) {
+	      const el = document.querySelector(sel);
+	      if (!el) return;
+	      const start = _numAttr(el, "start", 0);
+	      const dur = _numAttr(el, "duration", 0);
+	      if (!(dur > 0)) {
+	        tl.set(sel, { opacity: 0 }, 0);
+	        return;
+	      }
+	      tl.fromTo(sel, { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.4, ease: "back.out(1.6)" }, start);
+	      tl.to(sel, { opacity: 0, x: -40, duration: 0.3, ease: "power2.in" }, Math.max(start, start + dur - 0.3));
+	      tl.set(sel, { opacity: 0 }, start + dur);
+	    }
+	    bindTag("#tag-morning");
+	    bindTag("#tag-story1");
+	    bindTag("#tag-story2");
+	    bindTag("#tag-story3");
+
+	    const openerEl = document.querySelector("#opener-poster");
+	    if (openerEl && openerEl.style.display !== "none") {
+	      tl.set("#opener-poster", { xPercent: -50, yPercent: -50, scale: 0.92 }, 0);
+	      tl.fromTo(
+	        "#opener-poster",
+	        { opacity: 0 },
+		        {
+		          opacity: 1,
+		          scale: 1.0,
+		          duration: 0.4,
+		          ease: "power3.out",
+		          overwrite: "auto",
+		        },
+	        0.5
+	      );
+	      tl.to(
+	        "#opener-poster",
+		        { opacity: 0, duration: 0.4, ease: "power2.in", overwrite: "auto" },
+	        0.5 + 4.0 - 0.4
+	      );
+	    }
+
+	    /* === Climax glitch (schedule from clip data attrs) === */
+		    tl.set("#climax-glitch",   { xPercent: -50, yPercent: 0 }, 0);
+		    tl.set("#climax-glitch-r", { xPercent: -50, yPercent: 0 }, 0);
+		    tl.set("#climax-glitch-c", { xPercent: -50, yPercent: 0 }, 0);
+	    const climaxEl = document.querySelector("#climax-glitch");
+	    const climaxStart = _numAttr(climaxEl, "start", 0);
+	    const climaxDur = _numAttr(climaxEl, "duration", 0);
+	    if (climaxDur > 0) {
+		      tl.fromTo(
+		        "#climax-glitch",
+		        { opacity: 0, scale: 0.9 },
+		        {
+		          opacity: 1,
+		          scale: 1.0,
+		          duration: 0.3,
+		          ease: "power2.out",
+		          overwrite: "auto",
+		        },
+		        climaxStart
+		      );
+		      tl.fromTo(
+		        "#climax-glitch-r",
+		        { x: -50, opacity: 0 },
+		        { x: -12, opacity: 0.85, duration: 0.08, overwrite: "auto" },
+		        climaxStart + 0.20
+		      );
+		      tl.fromTo(
+		        "#climax-glitch-c",
+		        { x: 50, opacity: 0 },
+		        { x: 12, opacity: 0.85, duration: 0.08, overwrite: "auto" },
+		        climaxStart + 0.20
+		      );
+		      tl.to(
+		        "#climax-glitch-r",
+		        { x: -4, duration: 0.32, ease: "power3.out", overwrite: "auto" },
+		        climaxStart + 0.30
+		      );
+		      tl.to(
+		        "#climax-glitch-c",
+		        { x: 4, duration: 0.32, ease: "power3.out", overwrite: "auto" },
+		        climaxStart + 0.30
+		      );
+	      tl.to("#climax-glitch", { scale: 1.04, duration: 0.20, yoyo: true, repeat: 1 }, climaxStart + Math.max(0.2, climaxDur * 0.55));
+		      tl.to(
+		        ["#climax-glitch", "#climax-glitch-r", "#climax-glitch-c"],
+		        { opacity: 0, duration: 0.4, ease: "power2.in", overwrite: "auto" },
+		        Math.max(climaxStart, climaxStart + climaxDur - 0.25)
+		      );
+	    }
+
+	    /* === End card (schedule from clip data attrs) === */
+	    const endEl = document.querySelector("#end-card");
+	    const endStart = _numAttr(endEl, "start", 0);
+	    const endDur = _numAttr(endEl, "duration", 0);
+	    if (endDur > 0) {
+	      tl.to("#end-card", { opacity: 1, duration: 0.4, ease: "power2.out" }, endStart);
+	      tl.from(".end-card .show",    { y: 22, opacity: 0, duration: 0.4, ease: "power3.out" }, endStart + 0.10);
+	      tl.from(".end-card .tagline", { y: 14, opacity: 0, duration: 0.4, ease: "power2.out" }, endStart + 0.40);
+	      tl.from(".end-card .source",  { opacity: 0, duration: 0.4, ease: "power2.out" }, endStart + 0.70);
+	    }
+
+    window.__timelines["main"] = tl;
+  </script>
+</body>
+</html>

@@ -1,0 +1,781 @@
+<!-- SOURCE OF TRUTH.
+     Render-time values are injected by scripts/modes/talking_head.py from this .tmpl.
+     The sibling talking-head.html is derived — edit this file, not the .html. -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1080, height=1920" />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 1080px; height: 1920px;
+      overflow: hidden; background: #04060A;
+      font-family: "Inter", system-ui, sans-serif;
+      color: #F4F1EA;
+      -webkit-font-smoothing: antialiased;
+    }
+    #root { position: relative; width: 100%; height: 100%; background: #04060A; }
+
+    .avatar-video {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 1080px; height: 1920px;
+      object-fit: cover;
+      z-index: 1;
+    }
+
+    .top-gradient {
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 240px;
+      background: linear-gradient(180deg, rgba(4,6,10,0.85) 0%, rgba(4,6,10,0.55) 50%, transparent 100%);
+      z-index: 10;
+      pointer-events: none;
+    }
+    .live-badge {
+      position: absolute;
+      top: 36px; left: 40px;
+      display: flex; align-items: center; gap: 10px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 18px; letter-spacing: 0.18em;
+      font-weight: 700;
+      color: #FF3355;
+      z-index: 20;
+    }
+    .live-badge .led {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: #FF3355; box-shadow: 0 0 16px #FF3355;
+    }
+    .timestamp {
+      position: absolute;
+      top: 78px; left: 40px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px; letter-spacing: 0.16em;
+      color: #8C9296;
+      z-index: 20;
+    }
+    .show-id {
+      position: absolute;
+      top: 38px; right: 40px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 16px; letter-spacing: 0.20em;
+      color: #C0C7CB;
+      z-index: 20;
+      text-align: right;
+    }
+    .show-id .accent { color: #5BB7E0; }
+
+    .scanlines {
+      position: absolute; inset: 0;
+      pointer-events: none;
+      background-image: repeating-linear-gradient(
+        0deg,
+        rgba(255,255,255,0.025) 0px,
+        rgba(255,255,255,0.025) 1px,
+        transparent 1px,
+        transparent 4px
+      );
+      mix-blend-mode: overlay;
+      z-index: 9;
+    }
+
+    .floater {
+      position: absolute;
+      z-index: 15;
+      opacity: 0;
+    }
+
+    /* Top-left tag — MORNING brief = cool blue border */
+    .story-tag {
+      top: 156px; left: 40px;
+      font-family: "Space Grotesk", sans-serif;
+      font-weight: 900; font-size: 26px;
+      color: #5BB7E0;
+      background: rgba(91,183,224,0.12);
+      border: 2px solid #5BB7E0;
+      padding: 8px 22px;
+      letter-spacing: 0.20em;
+      box-shadow: 0 0 30px rgba(91,183,224,0.3);
+    }
+    .story-tag.red {
+      color: #FF3355;
+      background: rgba(255,51,85,0.12);
+      border-color: #FF3355;
+      box-shadow: 0 0 30px rgba(255,51,85,0.3);
+    }
+    .story-tag.warm {
+      color: #F2B855;
+      background: rgba(242,184,85,0.12);
+      border-color: #F2B855;
+      box-shadow: 0 0 30px rgba(242,184,85,0.3);
+    }
+
+    /* Full-frame takeover overlays */
+    .takeover {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 18;
+      background: linear-gradient(180deg, rgba(4,6,10,0.0) 0%, rgba(4,6,10,0.55) 30%, rgba(4,6,10,0.55) 70%, rgba(4,6,10,0.0) 100%);
+      display: flex; align-items: center; justify-content: center; flex-direction: column;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .takeover .headline {
+      font-family: "Space Grotesk", sans-serif;
+      font-weight: 800; font-size: 200px;
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+      color: #F4F1EA;
+      text-align: center;
+      text-shadow: 0 0 60px rgba(91,183,224,0.5);
+    }
+    .takeover .headline.smaller { font-size: 150px; }
+    .takeover .headline.tiny { font-size: 86px; }
+    .takeover .headline.mid { font-size: 112px; }
+    .takeover .headline .accent { color: #5BB7E0; }
+    .takeover .headline .red { color: #FF3355; }
+    .takeover .headline .warm { color: #F2B855; }
+    .takeover .headline .magenta { color: #C458DC; }
+    .takeover .subhead {
+      margin-top: 32px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 24px; letter-spacing: 0.16em;
+      color: #C0C7CB;
+      text-align: center;
+      padding: 0 60px;
+    }
+
+    /* Chip cluster, upper-right */
+    .chip-cluster {
+      top: 220px; right: 40px;
+      display: flex; flex-direction: column; gap: 14px; align-items: flex-end;
+    }
+    .chip {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 22px; letter-spacing: 0.10em;
+      padding: 14px 22px;
+      background: rgba(91,183,224,0.16);
+      border: 1px solid rgba(91,183,224,0.6);
+      border-radius: 8px;
+      color: #5BB7E0;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      opacity: 0;
+    }
+    .chip.actor {
+      background: rgba(255,51,85,0.18);
+      border-color: rgba(255,51,85,0.7);
+      color: #FF3355;
+    }
+    .chip.tag {
+      background: rgba(196,88,220,0.18);
+      border-color: rgba(196,88,220,0.7);
+      color: #C458DC;
+    }
+    .chip.warm {
+      background: rgba(242,184,85,0.16);
+      border-color: rgba(242,184,85,0.6);
+      color: #F2B855;
+    }
+
+    /* Subtitle band — morning edition: cool blue accent stripe */
+    .subtitle-band {
+      position: absolute;
+      bottom: 110px; left: 50%;
+      transform: translateX(-50%);
+      width: 88%;
+      max-width: 950px;
+      padding: 22px 32px;
+      background: rgba(4, 6, 10, 0.82);
+      backdrop-filter: blur(8px);
+      border-radius: 6px;
+      border-left: 4px solid #5BB7E0;
+      font-family: "Inter", sans-serif;
+      font-weight: 600;
+      font-size: 36px;
+      line-height: 1.25;
+      color: #F4F1EA;
+      text-align: center;
+      z-index: 22;
+      opacity: 0;
+    }
+
+    /* Bottom ticker — morning cool edition */
+    .ticker {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 60px;
+      background: linear-gradient(90deg, rgba(8,18,28,0.95), rgba(91,183,224,0.18));
+      border-top: 2px solid rgba(91,183,224,0.55);
+      box-shadow: 0 -2px 16px rgba(91,183,224,0.18);
+      display: flex; align-items: center;
+      overflow: hidden;
+      z-index: 25;
+    }
+    .ticker .strip {
+      display: flex; gap: 70px;
+      white-space: nowrap;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 18px; letter-spacing: 0.14em;
+      color: #C0C7CB;
+      will-change: transform;
+    }
+    .ticker .strip .item .v { color: #5BB7E0; }
+    .ticker .strip .item .red { color: #FF3355; }
+    .ticker .strip .item .warm { color: #F2B855; }
+    .ticker .strip .item .magenta { color: #C458DC; }
+    .ticker .strip .item .cool { color: #5BB7E0; }
+
+    /* End card */
+    .end-card {
+      position: absolute;
+      inset: 0;
+      background: rgba(4, 6, 10, 0.97);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 100;
+      opacity: 0;
+    }
+    .end-card .show {
+      font-family: "Space Grotesk", sans-serif;
+      font-weight: 800; font-size: 84px;
+      letter-spacing: -0.02em; color: #F4F1EA; line-height: 1.0;
+      text-align: center;
+    }
+    .end-card .show .slash { color: #5BB7E0; margin: 0 10px; }
+    .end-card .tagline {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 26px; letter-spacing: 0.14em;
+      color: #C0C7CB; margin-top: 36px; text-align: center; padding: 0 60px; line-height: 1.5;
+    }
+    .end-card .tagline .accent { color: #5BB7E0; }
+    .end-card .tagline .red { color: #FF3355; }
+    .end-card .tagline .warm { color: #F2B855; }
+    .end-card .source {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 14px; letter-spacing: 0.20em;
+      color: #4D5C61; margin-top: 56px;
+    }
+
+    /* Generic info stamps */
+    .info-stamp {
+      position: absolute;
+      top: 50%; left: 50%;
+      font-family: "Space Grotesk", sans-serif;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      color: #F4F1EA;
+      text-align: center;
+      line-height: 1.0;
+      opacity: 0;
+      background: rgba(4,6,10,0.66);
+    }
+    .info-stamp .label {
+      display: block;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 22px;
+      letter-spacing: 0.20em;
+      margin-bottom: 16px;
+      font-weight: 700;
+    }
+    .info-stamp .sub {
+      display: block;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 22px;
+      letter-spacing: 0.18em;
+      margin-top: 16px;
+      font-weight: 700;
+    }
+
+    /* Exim breach stamp — red, the disclosure */
+    .breach-stamp {
+      font-size: 100px;
+      border: 8px solid #FF3355;
+      padding: 30px 60px;
+      box-shadow: 0 0 60px rgba(255,51,85,0.55);
+      text-shadow: 0 0 24px rgba(255,51,85,0.4);
+      min-width: 860px;
+    }
+    .breach-stamp .label { color: #FF3355; }
+    .breach-stamp .sub { color: #C0C7CB; }
+
+    /* Use-after-free details stamp */
+    .customers-stamp {
+      position: absolute;
+      top: 50%; left: 50%;
+      font-family: "Space Grotesk", sans-serif;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      color: #F4F1EA;
+      border: 6px solid #FF3355;
+      padding: 36px 54px;
+      text-align: left;
+      line-height: 1.08;
+      opacity: 0;
+      box-shadow: 0 0 60px rgba(255,51,85,0.55);
+      background: rgba(4,6,10,0.78);
+      min-width: 880px;
+    }
+    .customers-stamp .label {
+      display: block;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 22px;
+      letter-spacing: 0.20em;
+      color: #FF3355;
+      margin-bottom: 28px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .customers-stamp .row {
+      display: flex; align-items: baseline; justify-content: space-between;
+      font-size: 40px;
+      margin: 14px 0;
+      gap: 18px;
+    }
+    .customers-stamp .row .what {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 22px;
+      letter-spacing: 0.16em;
+      color: #C0C7CB;
+    }
+    .customers-stamp .row .val { color: #FF3355; font-size: 50px; }
+
+    /* Default-install / fix stamp — warm amber for vendor advisory */
+    .fine-stamp {
+      position: absolute;
+      top: 50%; left: 50%;
+      font-family: "Space Grotesk", sans-serif;
+      font-weight: 900;
+      color: #F4F1EA;
+      border: 8px solid #F2B855;
+      padding: 36px 60px;
+      box-shadow: 0 0 60px rgba(242,184,85,0.55);
+      background: rgba(4,6,10,0.78);
+      text-align: center;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      opacity: 0;
+      min-width: 880px;
+    }
+    .fine-stamp .label {
+      display: block;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 22px;
+      letter-spacing: 0.20em;
+      color: #F2B855;
+      margin-bottom: 22px;
+      font-weight: 700;
+    }
+    .fine-stamp .amount {
+      display: block;
+      font-size: 110px;
+      color: #F2B855;
+      line-height: 1.0;
+      margin: 0 auto 14px;
+    }
+    .fine-stamp .sub {
+      display: block;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 26px;
+      letter-spacing: 0.16em;
+      color: #C0C7CB;
+      margin-top: 18px;
+      font-weight: 700;
+    }
+    .fine-stamp .sub .red { color: #FF3355; }
+    .fine-stamp .sub .accent { color: #5BB7E0; }
+
+    /* West Pharma stamp — purple/magenta for second story */
+    .pharma-stamp {
+      position: absolute;
+      top: 50%; left: 50%;
+      font-family: "Space Grotesk", sans-serif;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      color: #F4F1EA;
+      border: 6px solid #C458DC;
+      padding: 30px 50px;
+      text-align: left;
+      line-height: 1.08;
+      opacity: 0;
+      box-shadow: 0 0 60px rgba(196,88,220,0.55);
+      background: rgba(4,6,10,0.78);
+      min-width: 920px;
+    }
+    .pharma-stamp .label {
+      display: block;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 22px;
+      letter-spacing: 0.20em;
+      color: #C458DC;
+      margin-bottom: 18px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .pharma-stamp .row {
+      display: flex; align-items: center; gap: 18px;
+      font-size: 30px;
+      margin: 12px 0;
+    }
+    .pharma-stamp .row .bullet {
+      color: #C458DC;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 26px;
+      width: 28px;
+    }
+    .pharma-stamp .row .what {
+      font-family: "JetBrains Mono", monospace;
+      color: #C0C7CB;
+      font-size: 24px;
+      letter-spacing: 0.10em;
+    }
+    .pharma-stamp .row .val { color: #C458DC; font-size: 40px; }
+
+    /* No-claim stamp — large punchy text */
+    .noclaim-stamp {
+      position: absolute;
+      top: 50%; left: 50%;
+      font-family: "Space Grotesk", sans-serif;
+      font-weight: 900;
+      color: #F4F1EA;
+      border: 8px solid #C458DC;
+      padding: 36px 60px;
+      box-shadow: 0 0 60px rgba(196,88,220,0.55);
+      background: rgba(4,6,10,0.82);
+      text-align: center;
+      letter-spacing: -0.02em;
+      line-height: 1.05;
+      opacity: 0;
+      min-width: 880px;
+    }
+    .noclaim-stamp .label {
+      display: block;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 22px;
+      letter-spacing: 0.20em;
+      color: #C458DC;
+      margin-bottom: 22px;
+      font-weight: 700;
+    }
+    .noclaim-stamp .amount {
+      display: block;
+      font-size: 96px;
+      color: #C458DC;
+      line-height: 1.0;
+    }
+    .noclaim-stamp .sub {
+      display: block;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 22px;
+      letter-spacing: 0.16em;
+      color: #C0C7CB;
+      margin-top: 22px;
+      font-weight: 700;
+    }
+
+    /* Climax glitch */
+    .climax-glitch {
+      position: absolute;
+      top: 50%; left: 50%;
+      font-family: "Space Grotesk", sans-serif;
+      font-weight: 900;
+      font-size: 140px;
+      color: #F4F1EA;
+      letter-spacing: -0.04em;
+      opacity: 0;
+      line-height: 1.0;
+      white-space: nowrap;
+      text-shadow: 0 0 30px rgba(91,183,224,0.4);
+    }
+    .climax-glitch-r,
+    .climax-glitch-c {
+      position: absolute;
+      top: 50%; left: 50%;
+      font-family: "Space Grotesk", sans-serif;
+      font-weight: 900;
+      font-size: 140px;
+      letter-spacing: -0.04em;
+      opacity: 0;
+      mix-blend-mode: screen;
+      pointer-events: none;
+      z-index: 18;
+      white-space: nowrap;
+      line-height: 1.0;
+    }
+    .climax-glitch-r { color: #FF3355; }
+    .climax-glitch-c { color: #5BB7E0; }
+  </style>
+</head>
+<body>
+	  <div id="root" data-composition-id="main"
+	       data-start="0" data-duration="{{TOTAL_DURATION}}"
+       data-width="1080" data-height="1920">
+
+    <!-- Master audio (HeyGen-synced) -->
+	    <audio id="master" class="clip"
+	           data-start="0" data-duration="{{AVATAR_DURATION}}"
+           data-track-index="50"
+           src="master.wav" data-volume="1"></audio>
+
+    <!-- Full-screen Tyler avatar -->
+	    <video id="avatar" class="clip avatar-video"
+	           data-start="0" data-duration="{{AVATAR_DURATION}}" data-track-index="1"
+           src="avatar.mp4" muted playsinline></video>
+
+    <div class="scanlines"></div>
+
+    <!-- Top chrome -->
+    <div class="top-gradient"></div>
+    <div class="live-badge"><span class="led" id="live-led"></span>LIVE</div>
+    <div class="timestamp" id="timestamp">CYBER WIRE · 06:00 UTC</div>
+    <div class="show-id">THREATNOIR<br><span class="accent">// CYBER NEWS</span></div>
+
+    <!-- Story tags (top-left) — track 5 (morning brief = cool blue) -->
+	    <div id="tag-morning" class="clip floater story-tag"
+	         data-start="0.3" data-duration="3.70" data-track-index="10">▌ {{EDITION_BADGE_TEXT}}</div>
+	    <div id="tag-story1" class="clip floater story-tag red"
+	         data-start="{{CHYRON_1_START}}" data-duration="{{CHYRON_1_DURATION}}" data-track-index="10">▌ {{CHYRON_1_TEXT}}</div>
+	    <div id="tag-story2" class="clip floater story-tag warm"
+	         data-start="{{CHYRON_2_START}}" data-duration="{{CHYRON_2_DURATION}}" data-track-index="10">▌ {{CHYRON_2_TEXT}}</div>
+	    <div id="tag-story3" class="clip floater story-tag red"
+	         data-start="{{CHYRON_3_START}}" data-duration="{{CHYRON_3_DURATION}}" data-track-index="10">▌ {{CHYRON_3_TEXT}}</div>
+
+    <!-- ============ Track 3: full-screen overlays ============ -->
+
+    <!-- Opener takeover during L2 (1.62 → 4.18) -->
+    <div id="opener-takeover" class="clip takeover"
+         data-start="1.55" data-duration="2.55" data-track-index="3">
+      <div class="headline tiny"><span class="accent">TWO STORIES.</span><br><span class="red">ONE THREAD.</span></div>
+	      <div class="subhead">{{EDITION_BADGE_TEXT}} · {{EDITION_DATE}}</div>
+    </div>
+
+    <!-- Exim CVE breach stamp during L3 (4.98 → 10.04) -->
+	    <div id="breach-stamp" class="clip info-stamp breach-stamp floater" style="{{CVE_CARD_STYLE}}"
+         data-start="5.10" data-duration="4.90" data-track-index="4">
+	      <span class="label">{{CVE_NUMBER}}</span>
+	      {{CVE_LINE_A}}
+	      <span class="sub">{{CVE_LINE_B}}</span>
+    </div>
+
+    <!-- Use-after-free details stamp during L4 (10.64 → 19.97) -->
+	    <div id="customers-stamp" class="clip customers-stamp floater"
+         data-start="10.75" data-duration="9.10" data-track-index="5">
+	      <span class="label">{{STORY_HEADLINE}}</span>
+	      <div class="row"><span class="what">HOOK</span><span class="val">{{CHYRON_1_TEXT}}</span></div>
+	      <div class="row"><span class="what">HOOK</span><span class="val">{{CHYRON_2_TEXT}}</span></div>
+	      <div class="row"><span class="what">CVE</span><span class="val">{{CVE_NUMBER}}</span></div>
+	      <div class="row"><span class="what">DETAIL</span><span class="val">{{CVE_LINE_B}}</span></div>
+    </div>
+
+    <!-- Default-install / fix stamp during L6 + L7 + L8 (25.43 → 39.14) -->
+	    <div id="fine-stamp" class="clip fine-stamp floater"
+         data-start="25.55" data-duration="9.70" data-track-index="6">
+	      <span class="label">PATCH WINDOW</span>
+	      <span class="amount">TONIGHT</span>
+	      <span class="sub">{{STORY_HEADLINE}} · <span class="accent">{{CVE_NUMBER}}</span></span>
+    </div>
+
+    <!-- West Pharma details stamp during L9 + L10 (40.14 → 52.49) -->
+	    <div id="pharma-stamp" class="clip pharma-stamp floater"
+         data-start="40.30" data-duration="12.10" data-track-index="7">
+	      <span class="label">{{EDITION_BADGE_TEXT}} · FOLLOW-UPS</span>
+	      <div class="row"><span class="bullet">&gt;</span><span class="what">ITEM</span><span class="val">{{CHYRON_3_TEXT}}</span></div>
+	      <div class="row"><span class="bullet">&gt;</span><span class="what">VENDORS</span><span class="val">{{CVE_LINE_A}}</span></div>
+	      <div class="row"><span class="bullet">&gt;</span><span class="what">DATE</span><span class="val">{{EDITION_DATE}}</span></div>
+	      <div class="row"><span class="bullet">&gt;</span><span class="what">SOURCE</span><span class="val">{{EDITION_BADGE_TEXT}}</span></div>
+    </div>
+
+    <!-- No-claim stamp during L11 (53.29 → 57.47) -->
+	    <div id="noclaim-stamp" class="clip noclaim-stamp floater"
+         data-start="53.40" data-duration="3.90" data-track-index="8">
+	      <span class="label">PUBLIC EXPLOIT</span>
+	      <span class="amount">LIVE</span>
+	      <span class="sub">PATCH BEFORE IT TRENDS</span>
+    </div>
+
+	    <!-- Climax GLITCH (render-time punchline) -->
+    <div id="climax-glitch" class="clip climax-glitch floater"
+	         data-start="{{CLIMAX_START}}" data-duration="{{CLIMAX_DURATION}}" data-track-index="9">{{CLIMAX_TEXT}}</div>
+	    <div id="climax-glitch-r" class="climax-glitch-r">{{CLIMAX_TEXT}}</div>
+	    <div id="climax-glitch-c" class="climax-glitch-c">{{CLIMAX_TEXT}}</div>
+
+    <!-- Chip cluster (track 2) — visible from L3 reveal through final card -->
+    <div id="story-chips" class="clip floater chip-cluster"
+         data-start="5.10" data-duration="58.00" data-track-index="2"
+         style="opacity: 1">
+	      <div class="chip actor" id="chip-1">{{CHYRON_1_TEXT}}</div>
+	      <div class="chip" id="chip-2">{{CVE_NUMBER}} · {{CVE_LINE_A}}</div>
+	      <div class="chip warm" id="chip-3">{{CHYRON_2_TEXT}}</div>
+	      <div class="chip tag" id="chip-4">{{CHYRON_3_TEXT}}</div>
+    </div>
+
+    <!-- Subtitle band (track 4) -->
+	    <div id="subtitle" class="clip subtitle-band"
+	         data-start="0" data-duration="{{AVATAR_DURATION}}" data-track-index="11">
+      <span id="sub-text">&nbsp;</span>
+    </div>
+
+    <!-- Bottom ticker -->
+    <div class="ticker">
+	      <div class="strip" id="ticker-strip">
+	        {{TICKER_ITEMS_HTML}}
+	      </div>
+    </div>
+
+    <!-- End card (track 6) -->
+	    <div id="end-card" class="clip end-card"
+	         data-start="{{ENDCARD_START}}" data-duration="{{ENDCARD_DURATION}}" data-track-index="12">
+      <div class="show">THREATNOIR<span class="slash">//</span>CYBER NEWS</div>
+	      <div class="tagline">{{STORY_HEADLINE}}</div>
+	      <div class="source">SOURCES &middot; THREATNOIR {{EDITION_BADGE_TEXT}} &middot; {{STORY_DATE_ISO}}</div>
+    </div>
+
+  </div>
+
+  <script>
+    window.__timelines = window.__timelines || {};
+    const tl = gsap.timeline({ paused: true });
+
+	    /* Per-line subtitle data (written by scripts/modes/talking_head.py). */
+	    const SUBS = <!-- LINES_INSERT_HERE -->;
+    SUBS.forEach((s) => {
+      tl.set("#sub-text", { innerText: s.text }, s.start);
+      tl.to("#subtitle", { opacity: 1, duration: 0.18, ease: "power2.out", overwrite: "auto" }, s.start);
+      tl.to("#subtitle", { opacity: 0, duration: 0.2, ease: "power2.in", overwrite: "auto" }, s.end + 0.05);
+    });
+
+    /* LIVE LED throb */
+    tl.to("#live-led", { opacity: 0.4, duration: 0.7, ease: "sine.inOut", yoyo: true, repeat: 100 }, 0);
+
+	    const TOTAL = Number(document.querySelector("#root")?.dataset?.duration || 0);
+	
+	    /* Ticker scroll — finite (capture-safe) and bounded by composition duration */
+	    tl.fromTo(
+	      "#ticker-strip",
+	      { x: 0 },
+	      { x: -4200, duration: Math.max(8, TOTAL * 0.95), ease: "none" },
+	      0
+	    );
+
+	    /* Timestamp tick (bounded by composition duration) */
+    const ts = { sec: 0 };
+    tl.to(ts, {
+	      sec: TOTAL, duration: TOTAL, ease: "none",
+      onUpdate: function() {
+        const total = Math.floor(ts.sec);
+        const m = String(Math.floor(total / 60)).padStart(2, "0");
+        const s = String(total % 60).padStart(2, "0");
+        const el = document.querySelector("#timestamp");
+        if (el) el.innerText = "CYBER WIRE · 06:" + m + ":" + s + " UTC";
+      }
+    }, 0);
+
+	    /* === Story tags fade-in/out (schedule from clip data attrs) === */
+	    function _numAttr(el, name, fallback) {
+	      if (!el) return fallback;
+	      const v = Number(el.dataset ? el.dataset[name] : undefined);
+	      return Number.isFinite(v) ? v : fallback;
+	    }
+	    function bindTag(sel) {
+	      const el = document.querySelector(sel);
+	      if (!el) return;
+	      const start = _numAttr(el, "start", 0);
+	      const dur = _numAttr(el, "duration", 0);
+	      if (!(dur > 0)) {
+	        tl.set(sel, { opacity: 0 }, 0);
+	        return;
+	      }
+	      tl.fromTo(sel, { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.4, ease: "back.out(1.6)" }, start);
+	      tl.to(sel, { opacity: 0, x: -40, duration: 0.3, ease: "power2.in" }, Math.max(start, start + dur - 0.3));
+	      tl.set(sel, { opacity: 0 }, start + dur);
+	    }
+	    bindTag("#tag-morning");
+	    bindTag("#tag-story1");
+	    bindTag("#tag-story2");
+	    bindTag("#tag-story3");
+
+    /* === Opener takeover === */
+    tl.fromTo("#opener-takeover", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" }, 1.55);
+    tl.to("#opener-takeover", { opacity: 0, duration: 0.3, ease: "power2.in" }, 3.85);
+
+    /* === Exim breach stamp during L3 (4.98 → 10.04) === */
+    tl.set("#breach-stamp", { xPercent: -50, yPercent: -50, scale: 0.88 }, 0);
+    tl.fromTo("#breach-stamp", { opacity: 0 }, { opacity: 1, scale: 1.0, duration: 0.4, ease: "back.out(2)" }, 5.20);
+    tl.to("#breach-stamp", { scale: 1.03, duration: 0.18, yoyo: true, repeat: 1 }, 7.5);
+    tl.to("#breach-stamp", { opacity: 0, duration: 0.4, ease: "power2.in" }, 9.60);
+
+    /* === Chips stagger === */
+    tl.fromTo("#chip-1", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: 0.4, ease: "back.out(2)" }, 5.30);
+    tl.fromTo("#chip-2", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: 0.4, ease: "back.out(2)" }, 10.90);
+    tl.fromTo("#chip-3", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: 0.4, ease: "back.out(2)" }, 25.70);
+    tl.fromTo("#chip-4", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: 0.4, ease: "back.out(2)" }, 40.50);
+    tl.to("#story-chips", { opacity: 0, duration: 0.4, ease: "power2.in" }, 62.70);
+    tl.set("#story-chips", { opacity: 0 }, 63.10);
+
+    /* === Use-after-free details stamp during L4 (10.75 → 19.85) === */
+    tl.set("#customers-stamp", { xPercent: -50, yPercent: -50, scale: 0.92 }, 0);
+    tl.fromTo("#customers-stamp", { opacity: 0 }, { opacity: 1, scale: 1.0, duration: 0.4, ease: "back.out(1.8)" }, 10.85);
+    tl.from("#customers-stamp .row:nth-child(2)", { x: -20, opacity: 0, duration: 0.35, ease: "power2.out" }, 11.20);
+    tl.from("#customers-stamp .row:nth-child(3)", { x: -20, opacity: 0, duration: 0.35, ease: "power2.out" }, 13.20);
+    tl.from("#customers-stamp .row:nth-child(4)", { x: -20, opacity: 0, duration: 0.35, ease: "power2.out" }, 15.20);
+    tl.from("#customers-stamp .row:nth-child(5)", { x: -20, opacity: 0, duration: 0.35, ease: "power2.out" }, 17.20);
+    tl.to("#customers-stamp", { scale: 1.04, duration: 0.22, yoyo: true, repeat: 1 }, 18.60);
+    tl.to("#customers-stamp", { opacity: 0, duration: 0.4, ease: "power2.in" }, 19.40);
+
+    /* === Default-install / fix stamp during L6-L8 (25.55 → 35.20) === */
+    tl.set("#fine-stamp", { xPercent: -50, yPercent: -50, scale: 0.90, rotation: -1 }, 0);
+    tl.fromTo("#fine-stamp", { opacity: 0 }, { opacity: 1, scale: 1.0, duration: 0.45, ease: "back.out(2)" }, 25.70);
+    tl.to("#fine-stamp", { rotation: 0, duration: 0.25, yoyo: true, repeat: 1 }, 27.0);
+    tl.to("#fine-stamp", { scale: 1.03, duration: 0.22, yoyo: true, repeat: 1 }, 31.0);
+    tl.to("#fine-stamp", { opacity: 0, duration: 0.4, ease: "power2.in" }, 34.80);
+
+    /* === West Pharma stamp during L9-L10 (40.30 → 52.40) === */
+    tl.set("#pharma-stamp", { xPercent: -50, yPercent: -50, scale: 0.92 }, 0);
+    tl.fromTo("#pharma-stamp", { opacity: 0 }, { opacity: 1, scale: 1.0, duration: 0.4, ease: "back.out(1.8)" }, 40.45);
+    tl.from("#pharma-stamp .row:nth-child(2)", { x: -20, opacity: 0, duration: 0.40, ease: "power2.out" }, 40.80);
+    tl.from("#pharma-stamp .row:nth-child(3)", { x: -20, opacity: 0, duration: 0.40, ease: "power2.out" }, 43.30);
+    tl.from("#pharma-stamp .row:nth-child(4)", { x: -20, opacity: 0, duration: 0.40, ease: "power2.out" }, 46.80);
+    tl.from("#pharma-stamp .row:nth-child(5)", { x: -20, opacity: 0, duration: 0.40, ease: "power2.out" }, 49.30);
+    tl.to("#pharma-stamp", { scale: 1.04, duration: 0.22, yoyo: true, repeat: 1 }, 51.10);
+    tl.to("#pharma-stamp", { opacity: 0, duration: 0.4, ease: "power2.in" }, 51.95);
+
+    /* === No-claim stamp during L11 (53.40 → 57.30) === */
+    tl.set("#noclaim-stamp", { xPercent: -50, yPercent: -50, scale: 0.90 }, 0);
+    tl.fromTo("#noclaim-stamp", { opacity: 0 }, { opacity: 1, scale: 1.0, duration: 0.4, ease: "back.out(2)" }, 53.55);
+    tl.to("#noclaim-stamp", { scale: 1.04, duration: 0.22, yoyo: true, repeat: 1 }, 55.30);
+    tl.to("#noclaim-stamp", { opacity: 0, duration: 0.4, ease: "power2.in" }, 56.85);
+
+	    /* === Climax glitch (schedule from clip data attrs) === */
+	    tl.set("#climax-glitch",   { xPercent: -50, yPercent: -50 }, 0);
+	    tl.set("#climax-glitch-r", { xPercent: -50, yPercent: -50 }, 0);
+	    tl.set("#climax-glitch-c", { xPercent: -50, yPercent: -50 }, 0);
+	    const climaxEl = document.querySelector("#climax-glitch");
+	    const climaxStart = _numAttr(climaxEl, "start", 0);
+	    const climaxDur = _numAttr(climaxEl, "duration", 0);
+	    if (climaxDur > 0) {
+	      tl.fromTo("#climax-glitch", { opacity: 0, scale: 0.9 }, { opacity: 1, scale: 1.0, duration: 0.3, ease: "power2.out" }, climaxStart);
+	      tl.fromTo("#climax-glitch-r", { x: -50, opacity: 0 }, { x: -12, opacity: 0.85, duration: 0.08 }, climaxStart + 0.20);
+	      tl.fromTo("#climax-glitch-c", { x:  50, opacity: 0 }, { x:  12, opacity: 0.85, duration: 0.08 }, climaxStart + 0.20);
+	      tl.to("#climax-glitch-r", { x: -4, duration: 0.32, ease: "power3.out" }, climaxStart + 0.30);
+	      tl.to("#climax-glitch-c", { x:  4, duration: 0.32, ease: "power3.out" }, climaxStart + 0.30);
+	      tl.to("#climax-glitch", { scale: 1.04, duration: 0.20, yoyo: true, repeat: 1 }, climaxStart + Math.max(0.2, climaxDur * 0.55));
+	      tl.to(["#climax-glitch","#climax-glitch-r","#climax-glitch-c"], { opacity: 0, duration: 0.4, ease: "power2.in" }, Math.max(climaxStart, climaxStart + climaxDur - 0.25));
+	    }
+
+	    /* === End card (schedule from clip data attrs) === */
+	    const endEl = document.querySelector("#end-card");
+	    const endStart = _numAttr(endEl, "start", 0);
+	    const endDur = _numAttr(endEl, "duration", 0);
+	    if (endDur > 0) {
+	      tl.to("#end-card", { opacity: 1, duration: 0.4, ease: "power2.out" }, endStart);
+	      tl.from(".end-card .show",    { y: 22, opacity: 0, duration: 0.4, ease: "power3.out" }, endStart + 0.10);
+	      tl.from(".end-card .tagline", { y: 14, opacity: 0, duration: 0.4, ease: "power2.out" }, endStart + 0.40);
+	      tl.from(".end-card .source",  { opacity: 0, duration: 0.4, ease: "power2.out" }, endStart + 0.70);
+	    }
+
+    window.__timelines["main"] = tl;
+  </script>
+</body>
+</html>
