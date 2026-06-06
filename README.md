@@ -1,5 +1,8 @@
 ## ThreatNoir Cyber News (OSS)
 
+[![ci](https://github.com/MLenngren/cyber-news-shorts/actions/workflows/ci.yml/badge.svg)](https://github.com/MLenngren/cyber-news-shorts/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 Cyber News Shorts is a small, scriptable pipeline for generating vertical (9:16) cybersecurity news shorts.
 
 It turns a Markdown “script” into:
