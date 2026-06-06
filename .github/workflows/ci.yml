@@ -14,9 +14,12 @@ jobs:
 
       # NOTE: each grep excludes .github/ — this workflow itself contains the
       # patterns it searches for, and would otherwise self-match.
+      # The `lenngren` term is boundary-guarded `(^|[^a-z])lenngren` so it catches
+      # the personal name but NOT the GitHub owner handle `MLenngren`, which is
+      # unavoidable in the repo's own URLs (badges, links, clone instructions).
       - name: No operator / personal identity
         run: |
-          if git grep -niE 'marcus|lenngren|340209949797777408|marcuslenngren|i minsta laget' -- . ':!.github'; then
+          if git grep -niE 'marcus|(^|[^a-z])lenngren|340209949797777408|i minsta laget' -- . ':!.github'; then
             echo "::error::Operator/personal identity found in tracked files. Route identity through env vars with safe fallbacks (see CONTRIBUTING.md)."
             exit 1
           fi
