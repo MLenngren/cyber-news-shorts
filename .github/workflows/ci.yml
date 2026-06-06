@@ -1,0 +1,62 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  audit:
+    name: Identity & secret audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # NOTE: each grep excludes .github/ — this workflow itself contains the
+      # patterns it searches for, and would otherwise self-match.
+      - name: No operator / personal identity
+        run: |
+          if git grep -niE 'marcus|lenngren|340209949797777408|marcuslenngren|i minsta laget' -- . ':!.github'; then
+            echo "::error::Operator/personal identity found in tracked files. Route identity through env vars with safe fallbacks (see CONTRIBUTING.md)."
+            exit 1
+          fi
+          echo "OK: no operator identity"
+
+      - name: No hardcoded secrets
+        run: |
+          if git grep -nE 'sk-[A-Za-z0-9]{20}|tn_live_|AIza[0-9A-Za-z_-]{30}|ghp_|xoxb-|-----BEGIN [A-Z ]*PRIVATE KEY' -- . ':!.github'; then
+            echo "::error::Secret-like string found. Secrets come from env vars / 1Password, never committed."
+            exit 1
+          fi
+          echo "OK: no secrets"
+
+      - name: No machine-specific host paths
+        run: |
+          if git grep -nE '/home/[a-z][a-z0-9_-]*/projects|/Users/[a-z][a-z0-9_-]*/' -- . ':!.github'; then
+            echo "::error::Machine-specific host path found. Derive paths at runtime."
+            exit 1
+          fi
+          echo "OK: no host paths"
+
+  lint:
+    name: Lint & deps
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Python files parse
+        run: |
+          python3 -c "import ast, glob; [ast.parse(open(f).read(), f) for f in glob.glob('scripts/**/*.py', recursive=True)]; print('OK: all .py parse')"
+
+      - name: Shell scripts lint
+        run: |
+          for s in $(git ls-files '*.sh'); do bash -n "$s" && echo "OK: $s"; done
+
+      - name: Requirements install (deps resolve)
+        run: |
+          python3 -m pip install --upgrade pip >/dev/null
+          python3 -m pip install -r requirements.txt
+          echo "OK: requirements install cleanly"
