@@ -24,6 +24,7 @@ from _util import (
     ffmpeg_silence,
     ffprobe_duration,
     get_secret,
+    verify_render_output,
     write_json,
 )
 
@@ -776,6 +777,11 @@ def run(
     log(f"DONE → {final_mp4}")
     log(f"  size: {final_mp4.stat().st_size / 1024 / 1024:.1f} MB")
     log(f"  duration: {ffprobe_duration(final_mp4):.2f}s")
+
+    # Post-render quality gate — refuse to publish a valid-but-broken (all-black /
+    # truncated) render. Raises RenderQualityError and quarantines the file.
+    qm = verify_render_output(final_mp4)
+    log(f"  quality gate OK: mean_luma={qm.get('mean_luma')} bytes={qm.get('bytes')}")
 
     if publish:
         log("=== [7] publish to YouTube Shorts ===")
