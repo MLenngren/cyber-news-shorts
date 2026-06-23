@@ -27,6 +27,23 @@ CLAUDE_BIN=${CLAUDE_BIN:-$(command -v claude || true)}
 # OSS safety: default is empty, so no DMs are sent.
 OPERATOR_DISCORD_ID=${OPERATOR_DISCORD_ID:-}
 
+# Best-effort Discord DM; no-op unless OPERATOR_DISCORD_ID is set.
+notify() {
+  [ -z "$OPERATOR_DISCORD_ID" ] && return 0
+  "$PYTHON_BIN" "$PROJ/scripts/discord_notify.py" \
+    --user-id "$OPERATOR_DISCORD_ID" --message "$1" >/dev/null 2>&1 || true
+}
+
+# Mean Y-average luma (0-255) across a clip; prints -1 if unmeasurable.
+# ~24 = black, 50-130 = normal SDR content.
+luma_of() {
+  local out
+  out=$(ffmpeg -hide_banner -nostats -i "$1" \
+    -vf "signalstats,metadata=print:key=lavfi.signalstats.YAVG" -f null - 2>&1) || true
+  printf '%s\n' "$out" | grep -oE "YAVG=[0-9.]+" \
+    | awk -F= '{s+=$2;n++} END{ if(n>0) printf "%.1f", s/n; else printf "-1" }'
+}
+
 # Auto-publish after render (opt-in; default off)
 export THREATNOIR_PUBLISH=${THREATNOIR_PUBLISH:-0}
 
@@ -100,15 +117,38 @@ Reply with:
 
 Keep reply under 30 lines."
 
+# --- Layer 0: pre-flight network check -------------------------------------
+# Fail fast (no spend) if the network is down. Probe the paid providers the
+# pipeline actually calls; add NEWS_BRIEF_URL when configured. Require >=2 up.
+PREFLIGHT_EPS=(https://api.anthropic.com https://api.elevenlabs.io https://api.pexels.com)
+[ -n "${NEWS_BRIEF_URL:-}" ] && PREFLIGHT_EPS+=("$NEWS_BRIEF_URL")
+PREFLIGHT_UP=0
+for EP in "${PREFLIGHT_EPS[@]}"; do
+  CODE=$(curl -sS -o /dev/null -m 8 -w '%{http_code}' "$EP" 2>/dev/null || echo 000)
+  if [ "$CODE" != "000" ]; then PREFLIGHT_UP=$((PREFLIGHT_UP + 1)); fi
+done
+if [ "$PREFLIGHT_UP" -lt 2 ]; then
+  echo "=== PREFLIGHT FAIL: only ${PREFLIGHT_UP}/${#PREFLIGHT_EPS[@]} endpoints reachable — network looks down; skipping ${EDITION} run ===" | tee -a "$LOG"
+  notify "Cyber news ${EDITION} short SKIPPED at $(date -Iseconds) — network unreachable (${PREFLIGHT_UP}/${#PREFLIGHT_EPS[@]} endpoints up). No render attempted, no spend. Log: $LOG"
+  exit 1
+fi
+echo "=== preflight OK: ${PREFLIGHT_UP}/${#PREFLIGHT_EPS[@]} endpoints reachable ===" | tee -a "$LOG"
+
+# Carries the producer exit status out of the (piped -> subshell) run block below.
+STATUS_FILE="/tmp/cyber-news-${EDITION}-status.$$"
+
 {
   echo "=== Cyber News Shorts (${EDITION}) — $(date -Iseconds) ==="
   if [ -z "$CLAUDE_BIN" ]; then
     echo "ERROR: claude not found in PATH. Set CLAUDE_BIN or install claude." >&2
     exit 127
   fi
-  "$CLAUDE_BIN" -p "$PROMPT" --verbose 2>&1
-  STATUS=$?
+  # Capture the producer's real exit code WITHOUT tripping `set -e` (a non-zero
+  # exit must reach the Layer-2 health verdict below, not abort the script).
+  STATUS=0
+  "$CLAUDE_BIN" -p "$PROMPT" --verbose 2>&1 || STATUS=$?
   echo "=== claude exit status: $STATUS ==="
+  echo "$STATUS" > "$STATUS_FILE"
 } | tee -a "$LOG"
 
 # Find the most recently produced short MP4 (within last 30 min)
@@ -118,14 +158,39 @@ if [ -d "$PROJ/shorts" ]; then
     | sort -nr | head -1 | cut -d' ' -f2-)
 fi
 
-# Discord notification (best-effort)
-if [ -n "$OPERATOR_DISCORD_ID" ]; then
-  if [ -n "$LATEST_MP4" ]; then
-    SIZE=$(du -h "$LATEST_MP4" | cut -f1)
-    DUR=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$LATEST_MP4" 2>/dev/null | xargs printf '%.0f')
-    MSG=$'**Cyber news short ready ('"${EDITION}"$')**\\n\\nPath: '"$LATEST_MP4"$'\\nDuration: '"${DUR}s"$'\\nSize: '"$SIZE"$'\\n\\nLog: '"$LOG"
-  else
-    MSG="Cyber news short FAILED (${EDITION}) at $(date -Iseconds). Log: $LOG"
+# --- Layer 2: health verdict ------------------------------------------------
+# Exit code 0 is necessary but NOT sufficient — a render can succeed yet emit a
+# black or truncated short (the in-process quality gate is Layer 1). Verify
+# substance (producer exit status, file size, mean luma, log error signatures)
+# and report an ACCURATE outcome instead of a misleading "success".
+STATUS=$(cat "$STATUS_FILE" 2>/dev/null || echo 1); rm -f "$STATUS_FILE"
+HEALTH_OK=1
+HEALTH_REASON=""
+LUMA="n/a"
+add_reason() { HEALTH_REASON="${HEALTH_REASON:+$HEALTH_REASON; }$1"; HEALTH_OK=0; }
+
+if [ "${STATUS:-1}" -ne 0 ]; then add_reason "producer exit=$STATUS"; fi
+if grep -qiE "PAGEERROR|QUALITY GATE FAILED|RenderQualityError" "$LOG" 2>/dev/null; then
+  add_reason "error signature in log"
+fi
+if [ -n "$LATEST_MP4" ]; then
+  SZ=$(stat -c%s "$LATEST_MP4" 2>/dev/null || echo 0)
+  if [ "${SZ:-0}" -lt 2000000 ]; then add_reason "tiny file ${SZ}B"; fi
+  LUMA=$(luma_of "$LATEST_MP4" || true)
+  if awk "BEGIN{exit !(${LUMA:--1} >= 0 && ${LUMA:--1} < 30)}"; then
+    add_reason "near-black mean_luma=$LUMA"
   fi
-  "$PYTHON_BIN" scripts/discord_notify.py --user-id "$OPERATOR_DISCORD_ID" --message "$MSG" >/dev/null 2>&1 || true
+else
+  add_reason "no MP4 produced"
+fi
+
+if [ "$HEALTH_OK" -eq 1 ]; then
+  SIZE=$(du -h "$LATEST_MP4" | cut -f1)
+  DUR=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$LATEST_MP4" 2>/dev/null | xargs printf '%.0f')
+  echo "=== HEALTH OK: ${EDITION} short ready (mean_luma=$LUMA) ===" | tee -a "$LOG"
+  notify "$(printf '**Cyber news %s short ready**\n\nPath: %s\nDuration: %ss\nSize: %s\nLuma: %s\n\nLog: %s' \
+    "$EDITION" "$LATEST_MP4" "$DUR" "$SIZE" "$LUMA" "$LOG")"
+else
+  echo "=== HEALTH FAIL: $HEALTH_REASON ===" | tee -a "$LOG"
+  notify "Cyber news ${EDITION} short FAILED at $(date -Iseconds) — ${HEALTH_REASON}. Log: $LOG"
 fi

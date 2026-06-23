@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import subprocess
 import urllib.error
 import urllib.request
@@ -161,6 +162,127 @@ def ffprobe_duration(path: Path) -> float:
         check=True,
     )
     return float(out.stdout.strip() or 0.0)
+
+
+class RenderQualityError(RuntimeError):
+    """Raised by verify_render_output() when a finished render fails a quality
+    gate (near-black frames, truncated/empty file, too-short duration).
+
+    The pipeline produced a *technically valid* mp4 that is visually broken —
+    exactly the failure an exit-code-only cron happily publishes (e.g. an
+    all-black short from a composition JS error). The offending file is
+    quarantined out of the publish glob so it cannot be published and the cron
+    reports an accurate failure.
+    """
+
+    def __init__(
+        self, message: str, *, mp4: Path, reason: str, metrics: dict
+    ) -> None:
+        super().__init__(message)
+        self.mp4 = mp4
+        self.reason = reason
+        self.metrics = metrics
+
+
+def mean_frame_luma(path: Path, *, timeout_s: float = 180.0) -> float:
+    """Mean per-frame luma (Y average, 0-255) across the whole clip.
+
+    ~24 = black, 50-130 = normal SDR content. Returns -1.0 if it cannot be
+    measured (probe error) so callers can distinguish "measured dark" from
+    "could not measure" and avoid blocking a publish on a probe failure.
+    """
+    try:
+        proc = subprocess.run(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-nostats",
+                "-i",
+                str(path),
+                "-vf",
+                "signalstats,metadata=print:key=lavfi.signalstats.YAVG",
+                "-f",
+                "null",
+                "-",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return -1.0
+    vals = [float(v) for v in re.findall(r"YAVG=([0-9.]+)", proc.stderr)]
+    if not vals:
+        return -1.0
+    return sum(vals) / len(vals)
+
+
+def verify_render_output(
+    mp4: Path,
+    *,
+    min_bytes: int = 2_000_000,
+    min_luma: float = 30.0,
+    min_duration_s: float = 8.0,
+    quarantine_dir: Path | None = None,
+) -> dict:
+    """Post-render quality gate. Call AFTER render, BEFORE publish.
+
+    Catches the failure mode where the pipeline emits a valid-but-broken video
+    (all-black frames from a composition JS error, a truncated encode) and the
+    cron publishes it because the exit code was 0. On failure the bad mp4 is
+    moved into quarantine_dir (default <mp4parent>/_rejects/) — out of the
+    cron's ``find short-*.mp4`` glob — and RenderQualityError is raised. On
+    success returns the measured metrics dict.
+
+    Luma is advisory when it cannot be measured (returns -1): a probe failure
+    must not block an otherwise-good publish.
+    """
+    metrics: dict = {"path": str(mp4)}
+
+    def _quarantine_and_fail(reason: str) -> None:
+        qdir = quarantine_dir or (mp4.parent / "_rejects")
+        dest: Path = mp4
+        try:
+            if mp4.exists():
+                qdir.mkdir(parents=True, exist_ok=True)
+                dest = qdir / mp4.name
+                mp4.replace(dest)
+        except OSError:
+            dest = mp4  # best effort; still refuse to publish
+        raise RenderQualityError(
+            f"render quality gate FAILED: {reason} (quarantined -> {dest})",
+            mp4=dest,
+            reason=reason,
+            metrics=metrics,
+        )
+
+    if not mp4.exists():
+        raise RenderQualityError(
+            f"render produced no output file: {mp4}",
+            mp4=mp4,
+            reason="missing",
+            metrics=metrics,
+        )
+
+    size = mp4.stat().st_size
+    metrics["bytes"] = size
+    if size < min_bytes:
+        _quarantine_and_fail(f"file too small ({size} bytes < {min_bytes})")
+
+    try:
+        dur = ffprobe_duration(mp4)
+    except Exception:
+        dur = 0.0
+    metrics["duration_s"] = round(dur, 2)
+    if dur < min_duration_s:
+        _quarantine_and_fail(f"duration too short ({dur:.2f}s < {min_duration_s}s)")
+
+    luma = mean_frame_luma(mp4)
+    metrics["mean_luma"] = round(luma, 1)
+    if 0.0 <= luma < min_luma:
+        _quarantine_and_fail(f"near-black (mean luma {luma:.1f} < {min_luma})")
+
+    return metrics
 
 
 def ffmpeg_silence(out_wav: Path, dur_s: float) -> None:

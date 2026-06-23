@@ -32,7 +32,7 @@ from pathlib import Path
 
 from modes import broll, talking_head
 
-from _util import brand, get_secret
+from _util import RenderQualityError, brand, get_secret, verify_render_output
 
 PROJ = Path(__file__).resolve().parent.parent
 
@@ -443,6 +443,11 @@ def main() -> int:
     log(f"  size: {final_mp4.stat().st_size / 1024 / 1024:.1f} MB")
     log(f"  duration: {ffprobe_duration(final_mp4):.2f}s")
 
+    # Post-render quality gate — refuse to publish a valid-but-broken (all-black /
+    # truncated) render. Raises RenderQualityError and quarantines the file.
+    qm = verify_render_output(final_mp4)
+    log(f"  quality gate OK: mean_luma={qm.get('mean_luma')} bytes={qm.get('bytes')}")
+
     if args.publish:
         log("=== [7] publish to YouTube Shorts ===")
         cmd = [
@@ -458,4 +463,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except RenderQualityError as e:
+        log(f"QUALITY GATE FAILED — not publishing: {e}")
+        sys.exit(3)
